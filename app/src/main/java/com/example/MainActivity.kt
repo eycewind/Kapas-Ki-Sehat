@@ -13,6 +13,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import com.example.localization.AppLanguage
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -85,6 +86,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun KapasApp(sharedViewModel: SharedViewModel = viewModel()) {
+  var currentLanguage by remember { mutableStateOf(AppLanguage.URDU) }
+  
   val navController = rememberNavController()
   val navBackStackEntry by navController.currentBackStackEntryAsState()
   val currentRoute = navBackStackEntry?.destination?.route ?: "home"
