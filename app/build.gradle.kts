@@ -4,6 +4,7 @@ plugins {
   alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.roborazzi)
   alias(libs.plugins.secrets)
+  kotlin("plugin.serialization") version "1.9.22"
 }
 
 android {
@@ -100,6 +101,12 @@ dependencies {
   implementation(libs.okhttp)
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)
+  
+  // Ktor Client
+  implementation("io.ktor:ktor-client-android:2.3.7")
+  implementation("io.ktor:ktor-client-logging:2.3.7")
+  implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
+  implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)

@@ -54,6 +54,22 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.ui.theme.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.network.ScanResponse
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import java.io.File
+
+class SharedViewModel : ViewModel() {
+    private val _scanResult = MutableStateFlow<ScanResponse?>(null)
+    val scanResult: StateFlow<ScanResponse?> = _scanResult
+
+    fun setScanResult(result: ScanResponse) {
+        _scanResult.value = result
+    }
+}
 
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,7 +84,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun KapasApp() {
+fun KapasApp(sharedViewModel: SharedViewModel = viewModel()) {
   val navController = rememberNavController()
   val navBackStackEntry by navController.currentBackStackEntryAsState()
   val currentRoute = navBackStackEntry?.destination?.route ?: "home"
@@ -93,8 +109,8 @@ fun KapasApp() {
       composable("home") { HomeScreen(navController) }
       composable("history") { HistoryScreen(navController) }
       composable("expert") { ExpertScreen(navController) }
-      composable("scanner") { ScannerScreen(navController) }
-      composable("diagnosis") { DiagnosisScreen(navController) }
+      composable("scanner") { ScannerScreen(navController, sharedViewModel) }
+      composable("diagnosis") { DiagnosisScreen(navController, sharedViewModel) }
     }
   }
 }
@@ -471,8 +487,9 @@ fun BottomNavBar(navController: NavController, currentRoute: String) {
 }
 
 @Composable
-fun ScannerScreen(navController: NavController) {
+fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel) {
   val context = androidx.compose.ui.platform.LocalContext.current
+  val coroutineScope = rememberCoroutineScope()
   var hasCameraPermission by remember {
     mutableStateOf(
       androidx.core.content.ContextCompat.checkSelfPermission(
@@ -506,14 +523,7 @@ fun ScannerScreen(navController: NavController) {
       )
   )
 
-  LaunchedEffect(isScanning) {
-    if (isScanning) {
-      delay(2000)
-      navController.navigate("diagnosis") {
-        popUpTo("home") { inclusive = false }
-      }
-    }
-  }
+  val imageCapture = remember { androidx.camera.core.ImageCapture.Builder().build() }
 
   if (!hasCameraPermission) {
     Box(
@@ -574,7 +584,7 @@ fun ScannerScreen(navController: NavController) {
           
           try {
             cameraProvider.unbindAll()
-            cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview)
+            cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageCapture)
           } catch(e: Exception) {
             e.printStackTrace()
           }
@@ -714,7 +724,35 @@ fun ScannerScreen(navController: NavController) {
       }
     } else {
       IconButton(
-        onClick = { isScanning = true },
+        onClick = { 
+            isScanning = true 
+            val photoFile = File(context.cacheDir, "scan_${System.currentTimeMillis()}.jpg")
+            val outputOptions = androidx.camera.core.ImageCapture.OutputFileOptions.Builder(photoFile).build()
+            imageCapture.takePicture(
+                outputOptions,
+                androidx.core.content.ContextCompat.getMainExecutor(context),
+                object : androidx.camera.core.ImageCapture.OnImageSavedCallback {
+                    override fun onImageSaved(output: androidx.camera.core.ImageCapture.OutputFileResults) {
+                        coroutineScope.launch {
+                            try {
+                                val response = com.example.network.ApiClient.uploadScan(photoFile)
+                                sharedViewModel.setScanResult(response)
+                                navController.navigate("diagnosis") {
+                                    popUpTo("home") { inclusive = false }
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                                isScanning = false
+                            }
+                        }
+                    }
+                    override fun onError(exc: androidx.camera.core.ImageCaptureException) {
+                        exc.printStackTrace()
+                        isScanning = false
+                    }
+                }
+            )
+        },
         modifier = Modifier
           .align(Alignment.BottomCenter)
           .padding(bottom = 64.dp)
@@ -734,7 +772,12 @@ fun ScannerScreen(navController: NavController) {
 }
 
 @Composable
-fun DiagnosisScreen(navController: NavController) {
+fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewModel) {
+  val scanResult by sharedViewModel.scanResult.collectAsState()
+  val pestType = scanResult?.pest_type ?: "Unknown Analysis"
+  val confidence = scanResult?.confidence ?: 0f
+  val recommendation = scanResult?.recommendation_ur ?: "No recommendation available."
+
   Scaffold(
     modifier = Modifier.fillMaxSize(),
     containerColor = MaterialTheme.colorScheme.background
@@ -779,13 +822,13 @@ fun DiagnosisScreen(navController: NavController) {
           Spacer(modifier = Modifier.width(16.dp))
           Column {
             Text(
-              text = "Whitefly Infestation",
+              text = pestType,
               style = MaterialTheme.typography.titleLarge,
               color = WarningRed,
               fontWeight = FontWeight.Bold
             )
             Text(
-              text = "کپاس کی سفید مکھی کا حملہ",
+              text = pestType,
               style = UrduTextStyle.copy(
                   color = PureWhite,
                   fontSize = 18.sp,
@@ -810,9 +853,9 @@ fun DiagnosisScreen(navController: NavController) {
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          Text(text = "85% Severity - High Alert", color = WarningRed, fontWeight = FontWeight.Bold)
+          Text(text = "${(confidence * 100).toInt()}% Confidence", color = WarningRed, fontWeight = FontWeight.Bold)
           Text(
-            text = "سنگین نقصان کا خطرہ", 
+            text = "تشخیص کا اعتماد", 
             style = UrduTextStyle.copy(
                 color = WarningRed,
                 fontSize = 14.sp,
@@ -824,7 +867,7 @@ fun DiagnosisScreen(navController: NavController) {
         }
         Spacer(modifier = Modifier.height(8.dp))
         LinearProgressIndicator(
-          progress = { 0.85f },
+          progress = { confidence },
           modifier = Modifier
             .fillMaxWidth()
             .height(12.dp),
@@ -857,10 +900,7 @@ fun DiagnosisScreen(navController: NavController) {
           
           Spacer(modifier = Modifier.height(16.dp))
           
-          BulletPoint("Immediate chemical spray of Diafenthiuron (200ml/acre).")
-          BulletPoint("Deploy yellow sticky traps (40/acre) to catch adult flies.")
-          BulletPoint("Ensure a clean sprinkler flush to wash away sticky honeydew.")
-          BulletPoint("Avoid chemical cocktails that destroy predatory ladybugs.")
+          BulletPoint(recommendation)
         }
       }
       
