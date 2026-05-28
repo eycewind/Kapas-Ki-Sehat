@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import com.example.localization.AppLanguage
+import com.example.localization.LocalizationData
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -62,6 +63,7 @@ import com.example.network.ScanResponse
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.io.File
+import androidx.compose.ui.draw.clip
 
 class SharedViewModel : ViewModel() {
     private val _scanResult = MutableStateFlow<ScanResponse?>(null)
@@ -109,7 +111,7 @@ fun KapasApp(sharedViewModel: SharedViewModel = viewModel()) {
       enterTransition = { androidx.compose.animation.fadeIn(animationSpec = tween(300)) },
       exitTransition = { androidx.compose.animation.fadeOut(animationSpec = tween(300)) }
     ) {
-      composable("home") { HomeScreen(navController) }
+      composable("home") { HomeScreen(navController, currentLanguage) { currentLanguage = it } }
       composable("history") { HistoryScreen(navController) }
       composable("expert") { ExpertScreen(navController) }
       composable("scanner") { ScannerScreen(navController, sharedViewModel) }
@@ -119,7 +121,7 @@ fun KapasApp(sharedViewModel: SharedViewModel = viewModel()) {
 }
 
 @Composable
-fun HomeScreen(navController: NavController) {
+fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLanguageChange: (AppLanguage) -> Unit) {
   Column(
     modifier = Modifier
       .fillMaxSize()
@@ -149,24 +151,71 @@ fun HomeScreen(navController: NavController) {
             letterSpacing = 1.sp
           )
         }
-        Surface(
-          color = PureWhite.copy(alpha = 0.05f),
-          shape = CircleShape,
-          border = BorderStroke(1.dp, PureWhite.copy(alpha = 0.1f))
-        ) {
-          Row(
-            verticalAlignment = Alignment.CenterVertically, 
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        Column(horizontalAlignment = Alignment.End) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth(0.65f) // Bumped up slightly from 0.55f to give the row more horizontal breathing room
+                    .padding(end = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp), // Slightly wider gap between chips
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AppLanguage.values().forEach { language ->
+                    val isSelected = currentLanguage == language
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f) // Keeps them mathematically equal in width
+                            .height(36.dp) // Enforces a solid, clear vertical height instead of aspect ratio!
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSelected) Color(0xFF81E995) else Color(0xFF222222))
+                            .clickable { onLanguageChange(language) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = when (language) {
+                                AppLanguage.ENGLISH -> "EN"
+                                AppLanguage.URDU -> "اردو "
+                                AppLanguage.PUNJABI -> "پنجابی "
+                                AppLanguage.SARAIKI -> "سرائیکی "
+                            },
+                            modifier = Modifier.padding(vertical = 1.dp),
+                            maxLines = 1, // Strictly prohibits the text from wrapping to a second line and breaking layout heights
+                            style = if (language == AppLanguage.ENGLISH) {
+                                MaterialTheme.typography.bodyMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                )
+                            } else {
+                                UrduTextStyle.copy(
+                                    fontSize = if (language == AppLanguage.URDU) 13.sp else 11.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                            },
+                            color = if (isSelected) Color.Black else Color.White
+                        )
+                    }
+                }
+            }
+          Spacer(modifier = Modifier.height(8.dp))
+          Surface(
+            color = PureWhite.copy(alpha = 0.05f),
+            shape = CircleShape,
+            border = BorderStroke(1.dp, PureWhite.copy(alpha = 0.1f))
           ) {
-            Box(modifier = Modifier.size(6.dp).background(MintGreen, CircleShape))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-              text = "CLOUD SYNC: ACTIVE", 
-              fontSize = 9.sp, 
-              fontWeight = FontWeight.Bold, 
-              color = PureWhite, 
-              letterSpacing = (-0.5).sp
-            )
+            Row(
+              verticalAlignment = Alignment.CenterVertically, 
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+              Box(modifier = Modifier.size(6.dp).background(MintGreen, CircleShape))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text(
+                text = "CLOUD SYNC: ACTIVE", 
+                fontSize = 9.sp, 
+                fontWeight = FontWeight.Bold, 
+                color = PureWhite, 
+                letterSpacing = (-0.5).sp
+              )
+            }
           }
         }
       }
@@ -176,19 +225,12 @@ fun HomeScreen(navController: NavController) {
         modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
       ) {
         Text(
-          text = "As-Salamu Alaykum! Tap to begin scanning.", 
-          style = MaterialTheme.typography.bodyMedium, 
-          fontWeight = FontWeight.Medium, 
-          color = PureWhite
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-          text = "السلام علیکم! اسکین کرنے کے لیے ٹیپ کریں۔", 
-          style = UrduTextStyle.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Rtl), 
-          fontWeight = FontWeight.Bold, 
-          color = PureWhite, 
-          textAlign = TextAlign.Right, 
-          modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp) // Added small padding buffer for Nastaliq
+          text = LocalizationData.greetings[currentLanguage] ?: "", 
+          style = if (currentLanguage == AppLanguage.ENGLISH) MaterialTheme.typography.bodyMedium else UrduTextStyle.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Rtl),
+          fontWeight = if (currentLanguage == AppLanguage.ENGLISH) FontWeight.Medium else FontWeight.Bold,
+          color = PureWhite,
+          textAlign = if (currentLanguage == AppLanguage.ENGLISH) TextAlign.Left else TextAlign.Right,
+          modifier = if (currentLanguage == AppLanguage.ENGLISH) Modifier else Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp)
         )
       }
 
@@ -287,30 +329,23 @@ fun HomeScreen(navController: NavController) {
             ) {
               Column(modifier = Modifier.padding(12.dp)) {
                 Text(
-                  text = "CRITICAL WHITEFLY RISK", 
+                  text = LocalizationData.criticalWhiteflyRiskTitle[currentLanguage] ?: "", 
                   color = Color(0xFFB91C1C), 
-                  fontSize = 10.sp, 
+                  fontSize = if (currentLanguage == AppLanguage.ENGLISH) 10.sp else 14.sp, 
                   fontWeight = FontWeight.Black, 
-                  letterSpacing = 0.5.sp, 
+                  letterSpacing = if (currentLanguage == AppLanguage.ENGLISH) 0.5.sp else 0.sp, 
                   modifier = Modifier.padding(bottom = 4.dp).fillMaxWidth(),
-                  textAlign = TextAlign.Start
+                  textAlign = if (currentLanguage == AppLanguage.ENGLISH) TextAlign.Start else TextAlign.Right,
+                  style = if (currentLanguage == AppLanguage.ENGLISH) androidx.compose.ui.text.TextStyle.Default else UrduTextStyle.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Rtl)
                 )
                 Text(
-                  text = "High risk of Whitefly expansion due to continuous dry heat wave.", 
+                  text = LocalizationData.criticalWhiteflyRiskDesc[currentLanguage] ?: "", 
                   color = Color(0xFF7F1D1D), 
-                  fontSize = 11.sp, 
-                  fontWeight = FontWeight.Bold, 
-                  lineHeight = 14.sp
-                )
-                Text(
-                  text = "سنگین خطرہ: مسلسل خشک گرمی کی وجہ سے سفید مکھی کے پھیلاؤ کا زیادہ خطرہ۔", 
-                  style = UrduTextStyle.copy(
-                      color = Color(0xFF7F1D1D), 
-                      fontSize = 14.sp,
-                      textDirection = androidx.compose.ui.text.style.TextDirection.Rtl
-                  ), 
-                  textAlign = TextAlign.Right, 
-                  modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp)
+                  fontSize = if (currentLanguage == AppLanguage.ENGLISH) 10.sp else 14.sp, 
+                  fontWeight = FontWeight.Medium, 
+                  lineHeight = if (currentLanguage == AppLanguage.ENGLISH) 14.sp else 24.sp,
+                  textAlign = if (currentLanguage == AppLanguage.ENGLISH) TextAlign.Start else TextAlign.Right,
+                  style = if (currentLanguage == AppLanguage.ENGLISH) androidx.compose.ui.text.TextStyle.Default else UrduTextStyle.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Rtl)
                 )
               }
             }
@@ -334,7 +369,7 @@ fun HomeScreen(navController: NavController) {
             Column(
               horizontalAlignment = Alignment.CenterHorizontally, 
               verticalArrangement = Arrangement.Center,
-              modifier = Modifier.padding(vertical = 16.dp, horizontal = 8.dp)
+              modifier = Modifier.height(140.dp)
             ) {
               Surface(
                 color = CharcoalBlack, 
@@ -351,25 +386,6 @@ fun HomeScreen(navController: NavController) {
                   )
                 }
               }
-              Spacer(modifier = Modifier.height(16.dp))
-              Text(
-                text = "SCAN CROP", 
-                color = CharcoalBlack, 
-                fontSize = 30.sp, 
-                fontWeight = FontWeight.Black, 
-                letterSpacing = (-1).sp
-              )
-              Text(
-                text = "کپاس کا پتہ اسکین کریں", 
-                style = UrduTextStyle.copy(
-                    color = CharcoalBlack, 
-                    fontSize = 24.sp, 
-                    fontWeight = FontWeight.Bold,
-                    textDirection = androidx.compose.ui.text.style.TextDirection.Rtl
-                ),
-                textAlign = TextAlign.Right,
-                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
-              )
             }
           }
         }
