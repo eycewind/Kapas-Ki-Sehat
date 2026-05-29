@@ -11,6 +11,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import com.example.localization.AppLanguage
@@ -107,8 +108,8 @@ fun KapasApp(sharedViewModel: SharedViewModel = viewModel()) {
             BottomNavBar(navController = navController, currentRoute = currentRoute)
         }
     },
-    containerColor = CharcoalBlack,
-    contentColor = PureWhite
+    containerColor = BgMain,
+    contentColor = TextPrimary
   ) { paddingValues ->
     NavHost(
       navController = navController, 
@@ -118,7 +119,7 @@ fun KapasApp(sharedViewModel: SharedViewModel = viewModel()) {
       exitTransition = { androidx.compose.animation.fadeOut(animationSpec = tween(300)) }
     ) {
       composable("home") { HomeScreen(navController, currentLanguage) { currentLanguage = it } }
-      composable("history") { HistoryScreen(navController) }
+      composable("history") { HistoryScreen(navController, currentLanguage) }
       composable("expert") { ExpertScreen(navController) }
       composable("scanner") { ScannerScreen(navController, sharedViewModel) }
       composable("diagnosis") { DiagnosisScreen(navController, sharedViewModel) }
@@ -149,7 +150,7 @@ fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLan
             text = "Kapas Ki Sehat", 
             style = MaterialTheme.typography.titleLarge, 
             fontWeight = FontWeight.Bold, 
-            color = WheatGold, 
+            color = BrandGold, 
             letterSpacing = (-0.5).sp
           )
           Text(
@@ -157,7 +158,7 @@ fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLan
             style = MaterialTheme.typography.labelSmall, 
             fontWeight = FontWeight.Normal, 
             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, 
-            color = PureWhite.copy(alpha = 0.5f), 
+            color = TextFaint, 
             letterSpacing = 1.sp
           )
         }
@@ -177,7 +178,8 @@ fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLan
                             .weight(1f) // Keeps them mathematically equal in width
                             .height(36.dp) // Enforces a solid, clear vertical height instead of aspect ratio!
                             .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) Color(0xFF81E995) else Color(0xFF222222))
+                            .border(1.dp, if (isSelected) Color.Transparent else BorderSubtle, RoundedCornerShape(8.dp))
+                            .background(if (isSelected) BrandGreen else Surface2)
                             .clickable { onLanguageChange(language) },
                         contentAlignment = Alignment.Center
                     ) {
@@ -201,28 +203,28 @@ fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLan
                                     textAlign = TextAlign.Center
                                 )
                             },
-                            color = if (isSelected) Color.Black else Color.White
+                            color = TextPrimary
                         )
                     }
                 }
             }
           Spacer(modifier = Modifier.height(8.dp))
           Surface(
-            color = PureWhite.copy(alpha = 0.05f),
+            color = Surface2,
             shape = CircleShape,
-            border = BorderStroke(1.dp, PureWhite.copy(alpha = 0.1f))
+            border = BorderStroke(1.dp, BorderSubtle)
           ) {
             Row(
               verticalAlignment = Alignment.CenterVertically, 
               modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
-              Box(modifier = Modifier.size(6.dp).background(MintGreen, CircleShape))
+              Box(modifier = Modifier.size(6.dp).background(SuccessGreen, CircleShape))
               Spacer(modifier = Modifier.width(6.dp))
               Text(
                 text = "CLOUD SYNC: ACTIVE", 
                 fontSize = 9.sp, 
                 fontWeight = FontWeight.Bold, 
-                color = PureWhite, 
+                color = TextPrimary, 
                 letterSpacing = (-0.5).sp
               )
             }
@@ -238,7 +240,7 @@ fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLan
           text = LocalizationData.greetings[currentLanguage] ?: "", 
           style = if (currentLanguage == AppLanguage.ENGLISH) MaterialTheme.typography.bodyMedium else UrduTextStyle.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Rtl),
           fontWeight = if (currentLanguage == AppLanguage.ENGLISH) FontWeight.Medium else FontWeight.Bold,
-          color = PureWhite,
+          color = TextPrimary,
           textAlign = if (currentLanguage == AppLanguage.ENGLISH) TextAlign.Left else TextAlign.Right,
           modifier = if (currentLanguage == AppLanguage.ENGLISH) Modifier else Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp)
         )
@@ -248,9 +250,9 @@ fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLan
       Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
         // District Health Card
         Surface(
-          color = PureWhite,
+          color = Surface1,
           shape = RoundedCornerShape(16.dp),
-          border = BorderStroke(1.dp, PureWhite.copy(alpha = 0.1f)),
+          border = BorderStroke(1.dp, BorderSubtle),
           modifier = Modifier.fillMaxWidth(),
           shadowElevation = 8.dp
         ) {
@@ -264,18 +266,18 @@ fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLan
             ) {
               Text(
                 text = "DISTRICT HEALTH & RISK", 
-                color = WheatGold, 
+                color = BrandGold, 
                 fontSize = 12.sp, 
                 fontWeight = FontWeight.Black, 
                 letterSpacing = 1.sp
               )
               Surface(
-                color = Color(0xFFF8FAFC), 
+                color = Surface3, 
                 shape = RoundedCornerShape(6.dp)
               ) {
                 Text(
                   text = "MULTAN BELT", 
-                  color = Color(0xFF1E293B), 
+                  color = TextPrimary, 
                   fontSize = 10.sp, 
                   fontWeight = FontWeight.Bold, 
                   modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
@@ -291,40 +293,40 @@ fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLan
             ) {
               // Block 1
               Box(
-                modifier = Modifier.weight(1f).background(Color(0xFFF8FAFC), RoundedCornerShape(12.dp)).padding(8.dp), 
+                modifier = Modifier.weight(1f).background(Surface2, RoundedCornerShape(12.dp)).padding(8.dp), 
                 contentAlignment = Alignment.Center
               ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                  Icon(androidx.compose.material.icons.Icons.Default.WbSunny, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(20.dp))
+                  Icon(androidx.compose.material.icons.Icons.Default.WbSunny, contentDescription = null, tint = BrandGold, modifier = Modifier.size(20.dp))
                   Spacer(modifier = Modifier.height(4.dp))
-                  Text("37°C", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
-                  Text("DRY/SUNNY", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64748B), letterSpacing = (-0.5).sp)
+                  Text("37°C", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                  Text("DRY/SUNNY", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = TextSecondary, letterSpacing = (-0.5).sp)
                 }
               }
               Spacer(modifier = Modifier.width(8.dp))
               // Block 2
               Box(
-                modifier = Modifier.weight(1f).background(Color(0xFFF8FAFC), RoundedCornerShape(12.dp)).padding(8.dp), 
+                modifier = Modifier.weight(1f).background(Surface2, RoundedCornerShape(12.dp)).padding(8.dp), 
                 contentAlignment = Alignment.Center
               ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                  Icon(androidx.compose.material.icons.Icons.Default.WaterDrop, contentDescription = null, tint = Color(0xFF3B82F6), modifier = Modifier.size(20.dp))
+                  Icon(androidx.compose.material.icons.Icons.Default.WaterDrop, contentDescription = null, tint = InfoBlue, modifier = Modifier.size(20.dp))
                   Spacer(modifier = Modifier.height(4.dp))
-                  Text("42%", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
-                  Text("HUMIDITY", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64748B), letterSpacing = (-0.5).sp)
+                  Text("42%", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                  Text("HUMIDITY", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = TextSecondary, letterSpacing = (-0.5).sp)
                 }
               }
               Spacer(modifier = Modifier.width(8.dp))
               // Block 3
               Box(
-                modifier = Modifier.weight(1f).background(Color(0xFFF8FAFC), RoundedCornerShape(12.dp)).padding(8.dp), 
+                modifier = Modifier.weight(1f).background(Surface2, RoundedCornerShape(12.dp)).padding(8.dp), 
                 contentAlignment = Alignment.Center
               ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                  Icon(androidx.compose.material.icons.Icons.Default.Air, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(20.dp))
+                  Icon(androidx.compose.material.icons.Icons.Default.Air, contentDescription = null, tint = BrandGreenSoft, modifier = Modifier.size(20.dp))
                   Spacer(modifier = Modifier.height(4.dp))
-                  Text("14 km/h", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
-                  Text("WIND SPEED", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64748B), letterSpacing = (-0.5).sp)
+                  Text("14 km/h", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                  Text("WIND SPEED", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = TextSecondary, letterSpacing = (-0.5).sp)
                 }
               }
             }
@@ -332,15 +334,15 @@ fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLan
             Spacer(modifier = Modifier.height(16.dp))
             
             Surface(
-              color = Color(0xFFFEF2F2), 
-              border = BorderStroke(1.dp, Color(0xFFFEE2E2)), 
+              color = AlertBg, 
+              border = BorderStroke(1.dp, AlertBorder), 
               shape = RoundedCornerShape(8.dp), 
               modifier = Modifier.fillMaxWidth()
             ) {
               Column(modifier = Modifier.padding(12.dp)) {
                 Text(
                   text = LocalizationData.criticalWhiteflyRiskTitle[currentLanguage] ?: "", 
-                  color = Color(0xFFB91C1C), 
+                  color = WarningAmber, 
                   fontSize = if (currentLanguage == AppLanguage.ENGLISH) 10.sp else 14.sp, 
                   fontWeight = FontWeight.Black, 
                   letterSpacing = if (currentLanguage == AppLanguage.ENGLISH) 0.5.sp else 0.sp, 
@@ -350,7 +352,7 @@ fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLan
                 )
                 Text(
                   text = LocalizationData.criticalWhiteflyRiskDesc[currentLanguage] ?: "", 
-                  color = Color(0xFF7F1D1D), 
+                  color = AlertText, 
                   fontSize = if (currentLanguage == AppLanguage.ENGLISH) 10.sp else 14.sp, 
                   fontWeight = FontWeight.Medium, 
                   lineHeight = if (currentLanguage == AppLanguage.ENGLISH) 14.sp else 24.sp,
@@ -383,9 +385,9 @@ fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLan
                 }
                 navController.navigate("scanner") 
             },
-            color = MintGreen,
+            color = BrandGreen,
             shape = RoundedCornerShape(24.dp),
-            border = BorderStroke(4.dp, CharcoalBlack.copy(alpha = 0.1f)),
+            border = BorderStroke(4.dp, BorderSubtle),
             modifier = Modifier.fillMaxHeight().fillMaxWidth().testTag("scan_button")
           ) {
             Column(
@@ -394,7 +396,7 @@ fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLan
               modifier = Modifier.height(140.dp)
             ) {
               Surface(
-                color = CharcoalBlack, 
+                color = Surface1, 
                 shape = CircleShape, 
                 modifier = Modifier.size(96.dp), 
                 shadowElevation = 12.dp
@@ -403,7 +405,7 @@ fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLan
                   Icon(
                     androidx.compose.material.icons.Icons.Default.CameraAlt, 
                     contentDescription = null, 
-                    tint = MintGreen, 
+                    tint = BrandGreenSoft, 
                     modifier = Modifier.size(48.dp)
                   )
                 }
@@ -420,10 +422,10 @@ fun BottomNavBar(navController: NavController, currentRoute: String) {
   Row(
     modifier = Modifier
       .fillMaxWidth()
-      .background(CharcoalBlack)
+      .background(BgMain)
       .drawBehind {
          drawLine(
-             color = PureWhite.copy(alpha = 0.05f), 
+             color = BorderSubtle, 
              start = androidx.compose.ui.geometry.Offset(0f, 0f), 
              end = androidx.compose.ui.geometry.Offset(size.width, 0f), 
              strokeWidth = 1.dp.toPx()
@@ -448,23 +450,15 @@ fun BottomNavBar(navController: NavController, currentRoute: String) {
          horizontalAlignment = Alignment.CenterHorizontally
      ) {
          if (currentRoute == "home") {
-             Box(modifier = Modifier.size(6.dp).background(MintGreen, CircleShape))
+             Box(modifier = Modifier.size(6.dp).background(BrandGreenBright, CircleShape))
          } else {
              Icon(
                  androidx.compose.material.icons.Icons.Default.Home, 
                  contentDescription = null, 
-                 tint = PureWhite, 
+                 tint = TextFaint, 
                  modifier = Modifier.size(20.dp)
              )
          }
-         Spacer(modifier = Modifier.height(4.dp))
-         Text(
-             text = "HOME", 
-             color = PureWhite, 
-             fontSize = 9.sp, 
-             fontWeight = FontWeight.Bold, 
-             letterSpacing = 1.sp
-         )
      }
      
      // History Tab
@@ -477,23 +471,15 @@ fun BottomNavBar(navController: NavController, currentRoute: String) {
          horizontalAlignment = Alignment.CenterHorizontally
      ) {
          if (currentRoute == "history") {
-             Box(modifier = Modifier.size(6.dp).background(MintGreen, CircleShape))
+             Box(modifier = Modifier.size(6.dp).background(BrandGreenBright, CircleShape))
          } else {
              Icon(
                  androidx.compose.material.icons.Icons.Default.BarChart, 
                  contentDescription = null, 
-                 tint = PureWhite, 
+                 tint = TextFaint, 
                  modifier = Modifier.size(20.dp)
              )
          }
-         Spacer(modifier = Modifier.height(4.dp))
-         Text(
-             text = "HISTORY", 
-             color = PureWhite, 
-             fontSize = 9.sp, 
-             fontWeight = FontWeight.Bold, 
-             letterSpacing = 1.sp
-         )
      }
      
      // Expert Tab
@@ -506,23 +492,15 @@ fun BottomNavBar(navController: NavController, currentRoute: String) {
          horizontalAlignment = Alignment.CenterHorizontally
      ) {
          if (currentRoute == "expert") {
-             Box(modifier = Modifier.size(6.dp).background(MintGreen, CircleShape))
+             Box(modifier = Modifier.size(6.dp).background(BrandGreenBright, CircleShape))
          } else {
              Icon(
                  androidx.compose.material.icons.Icons.Default.Person, 
                  contentDescription = null, 
-                 tint = PureWhite, 
+                 tint = TextFaint, 
                  modifier = Modifier.size(20.dp)
              )
          }
-         Spacer(modifier = Modifier.height(4.dp))
-         Text(
-             text = "EXPERT", 
-             color = PureWhite, 
-             fontSize = 9.sp, 
-             fontWeight = FontWeight.Bold, 
-             letterSpacing = 1.sp
-         )
      }
   }
 }
@@ -570,7 +548,7 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
     Box(
       modifier = Modifier
         .fillMaxSize()
-        .background(CharcoalBlack)
+        .background(BgMain)
         .padding(16.dp),
       contentAlignment = Alignment.Center
     ) {
@@ -578,20 +556,20 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
         Icon(
           imageVector = Icons.Default.CropFree,
           contentDescription = null,
-          tint = PureWhite,
+          tint = TextPrimary,
           modifier = Modifier.size(64.dp).padding(bottom = 16.dp)
         )
         androidx.compose.material3.Button(
           onClick = { permissionLauncher.launch(android.Manifest.permission.CAMERA) },
-          colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = MintGreen),
+          colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = BrandGreen),
           shape = RoundedCornerShape(12.dp)
         ) {
           Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Grant Camera Permission", color = CharcoalBlack, fontWeight = FontWeight.Bold)
+            Text("Grant Camera Permission", color = TextPrimary, fontWeight = FontWeight.Bold)
             Text(
               "کیمرہ تک رسائی کی اجازت دیں",
               style = UrduTextStyle.copy(
-                  color = CharcoalBlack, 
+                  color = TextPrimary, 
                   fontSize = 16.sp, 
                   fontWeight = FontWeight.Bold,
                   textDirection = androidx.compose.ui.text.style.TextDirection.Rtl
@@ -644,12 +622,12 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
             Box(
                 modifier = Modifier
                     .size(12.dp)
-                    .background(MintGreen.copy(alpha = alpha), CircleShape)
+                    .background(BrandGreenBright.copy(alpha = alpha), CircleShape)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "READY FOR INFERENCE PIPELINE",
-                color = MintGreen,
+                color = BrandGreenBright,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.sp
@@ -659,7 +637,7 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
         Text(
             text = "کیمرہ ایکٹیو ہے",
             style = UrduTextStyle.copy(
-                color = MintGreen,
+                color = BrandGreenBright,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 textDirection = androidx.compose.ui.text.style.TextDirection.Rtl
@@ -696,7 +674,7 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
 
       drawPath(
         path = overlayPath,
-        color = CharcoalBlack.copy(alpha = 0.8f)
+        color = BgMain.copy(alpha = 0.8f)
       )
       
       // Draw corner brackets for the scanner
@@ -725,7 +703,7 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
           lineTo(cutoutRect.right, cutoutRect.bottom)
           lineTo(cutoutRect.right, cutoutRect.bottom - cornerLength)
         },
-        color = MintGreen,
+        color = BrandGreenSoft,
         style = Stroke(width = strokeWidth)
       )
     }
@@ -734,13 +712,13 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
       Column(
         modifier = Modifier
           .fillMaxSize()
-          .background(CharcoalBlack.copy(alpha = 0.9f))
+          .background(BgMain.copy(alpha = 0.9f))
           .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
       ) {
         CircularProgressIndicator(
-          color = MintGreen,
+          color = BrandGreenBright,
           strokeWidth = 6.dp,
           modifier = Modifier.size(64.dp)
         )
@@ -749,13 +727,13 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
           text = "Kapas AI Diagnostic Matrix",
           style = MaterialTheme.typography.titleLarge,
           fontWeight = FontWeight.Bold,
-          color = PureWhite
+          color = TextPrimary
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
           text = "Calibrating spectral channels...\nاسپیکٹرل کیلیبریشن...",
           style = UrduTextStyle.copy(
-              color = MintGreen,
+              color = TextSecondary,
               fontSize = 16.sp,
               textDirection = androidx.compose.ui.text.style.TextDirection.Rtl
           ),
@@ -798,13 +776,13 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
           .align(Alignment.BottomCenter)
           .padding(bottom = 64.dp)
           .size(80.dp)
-          .background(MintGreen, CircleShape)
+          .background(BrandGreenBright, CircleShape)
           .testTag("capture_button")
       ) {
         Icon(
           imageVector = Icons.Default.CameraAlt,
           contentDescription = "Capture",
-          tint = CharcoalBlack,
+          tint = BgMain,
           modifier = Modifier.size(40.dp)
         )
       }
@@ -821,7 +799,7 @@ fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewMod
 
   Scaffold(
     modifier = Modifier.fillMaxSize(),
-    containerColor = MaterialTheme.colorScheme.background
+    containerColor = BgMain
   ) { innerPadding ->
     Column(
       modifier = Modifier
@@ -832,14 +810,14 @@ fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewMod
       Text(
         text = "Agro AI Log Engine",
         style = MaterialTheme.typography.labelMedium,
-        color = MintGreen,
+        color = BrandGreenSoft,
         letterSpacing = 1.5.sp
       )
       Text(
         text = "Leaves Scan Diagnostics",
         style = MaterialTheme.typography.headlineMedium,
         fontWeight = FontWeight.Bold,
-        color = PureWhite
+        color = TextPrimary
       )
       
       Spacer(modifier = Modifier.height(32.dp))
@@ -847,8 +825,8 @@ fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewMod
       // Identified Attack Area
       Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = CharcoalBlack,
-        border = BorderStroke(2.dp, WarningRed),
+        color = AlertBg,
+        border = BorderStroke(2.dp, AlertBorder),
         shape = RoundedCornerShape(16.dp)
       ) {
         Row(
@@ -858,20 +836,20 @@ fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewMod
           Box(
             modifier = Modifier
               .size(12.dp)
-              .background(WarningRed, CircleShape)
+              .background(DangerRed, CircleShape)
           )
           Spacer(modifier = Modifier.width(16.dp))
           Column {
             Text(
               text = pestType,
               style = MaterialTheme.typography.titleLarge,
-              color = WarningRed,
+              color = DangerRed,
               fontWeight = FontWeight.Bold
             )
             Text(
               text = pestType,
               style = UrduTextStyle.copy(
-                  color = PureWhite,
+                  color = AlertText,
                   fontSize = 18.sp,
                   fontWeight = FontWeight.Medium,
                   textDirection = androidx.compose.ui.text.style.TextDirection.Rtl
@@ -894,11 +872,11 @@ fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewMod
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          Text(text = "${(confidence * 100).toInt()}% Confidence", color = WarningRed, fontWeight = FontWeight.Bold)
+          Text(text = "${(confidence * 100).toInt()}% Confidence", color = DangerRed, fontWeight = FontWeight.Bold)
           Text(
             text = "تشخیص کا اعتماد", 
             style = UrduTextStyle.copy(
-                color = WarningRed,
+                color = DangerRed,
                 fontSize = 14.sp,
                 textDirection = androidx.compose.ui.text.style.TextDirection.Rtl
             ),
@@ -912,8 +890,8 @@ fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewMod
           modifier = Modifier
             .fillMaxWidth()
             .height(12.dp),
-          color = WarningRed,
-          trackColor = MaterialTheme.colorScheme.surface,
+          color = DangerRed,
+          trackColor = Surface3,
           strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
         )
       }
@@ -923,7 +901,7 @@ fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewMod
       // Recommendations Card
       Surface(
         modifier = Modifier.fillMaxWidth().weight(1f),
-        color = PureWhite,
+        color = Surface1,
         shape = RoundedCornerShape(16.dp)
       ) {
         Column(
@@ -934,7 +912,7 @@ fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewMod
           Text(
             text = "ACTION PROTOCOL",
             style = MaterialTheme.typography.labelLarge,
-            color = CharcoalBlack,
+            color = BrandGold,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.2.sp
           )
@@ -960,14 +938,14 @@ fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewMod
           .testTag("save_log_button"),
         shape = RoundedCornerShape(16.dp),
         colors = ButtonDefaults.buttonColors(
-          containerColor = MaterialTheme.colorScheme.surface,
-          contentColor = PureWhite
+          containerColor = Surface2,
+          contentColor = TextPrimary
         )
       ) {
         Icon(
           imageVector = Icons.Default.CheckCircle,
           contentDescription = "Save",
-          tint = MintGreen,
+          tint = SuccessGreen,
           modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.width(12.dp))
@@ -994,12 +972,12 @@ fun ExpertScreen(navController: NavController) {
         text = "EXPERT CONNECT", 
         style = MaterialTheme.typography.titleLarge, 
         fontWeight = FontWeight.Bold, 
-        color = WheatGold, 
+        color = BrandGold, 
         modifier = Modifier.padding(bottom = 24.dp)
       )
       
       Surface(
-        color = PureWhite,
+        color = Surface1,
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth().weight(1f)
       ) {
@@ -1011,20 +989,20 @@ fun ExpertScreen(navController: NavController) {
           Icon(
             imageVector = Icons.Default.Person,
             contentDescription = null,
-            tint = MintGreen,
+            tint = BrandGreenSoft,
             modifier = Modifier.size(64.dp)
           )
           Spacer(modifier = Modifier.height(16.dp))
           Text(
             text = "Connect with an Agronomist",
-            color = CharcoalBlack,
+            color = TextPrimary,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold
           )
           Text(
             text = "زرعی ماہر سے رابطہ کریں",
             style = UrduTextStyle.copy(
-                color = CharcoalBlack,
+                color = TextPrimary,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 textDirection = androidx.compose.ui.text.style.TextDirection.Rtl
@@ -1038,7 +1016,7 @@ fun ExpertScreen(navController: NavController) {
 }
 
 @Composable
-fun HistoryScreen(navController: NavController) {
+fun HistoryScreen(navController: NavController, currentLanguage: AppLanguage) {
   val context = androidx.compose.ui.platform.LocalContext.current
   val appDatabase = (context.applicationContext as CottonAceApplication).database
   val scanHistoryList by appDatabase.scanHistoryDao().getAllScans().collectAsState(initial = emptyList())
@@ -1049,12 +1027,19 @@ fun HistoryScreen(navController: NavController) {
       .statusBarsPadding()
       .padding(16.dp)
   ) {
+    val titleText = when (currentLanguage) {
+        AppLanguage.ENGLISH -> "HEALTH LOGS"
+        AppLanguage.URDU -> "صحت کے لاگز"
+        AppLanguage.PUNJABI, AppLanguage.SARAIKI -> "صحت دے لاگز"
+    }
+
     Text(
-        text = "HEALTH LOGS", 
-        style = MaterialTheme.typography.titleLarge, 
+        text = titleText, 
+        style = if (currentLanguage == AppLanguage.ENGLISH) MaterialTheme.typography.titleLarge else UrduTextStyle.copy(fontSize = 26.sp), 
         fontWeight = FontWeight.Bold, 
-        color = WheatGold, 
-        modifier = Modifier.padding(bottom = 24.dp)
+        color = BrandGold, 
+        textAlign = if (currentLanguage == AppLanguage.ENGLISH) TextAlign.Start else TextAlign.End,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
       )
       
       LazyColumn(
@@ -1063,42 +1048,17 @@ fun HistoryScreen(navController: NavController) {
       ) {
           items(scanHistoryList) { scan ->
               Surface(
-                  color = PureWhite,
+                  color = Surface1,
                   shape = RoundedCornerShape(16.dp),
                   modifier = Modifier.fillMaxWidth()
               ) {
-                  Row(
-                      modifier = Modifier.padding(16.dp),
-                      verticalAlignment = Alignment.CenterVertically
-                  ) {
-                      Column(modifier = Modifier.weight(1f)) {
-                          val sdf = java.text.SimpleDateFormat("MMM dd, yyyy - hh:mm a", java.util.Locale.getDefault())
-                          Text(
-                              text = sdf.format(java.util.Date(scan.timestamp)),
-                              color = CharcoalBlack.copy(alpha = 0.6f),
-                              fontSize = 12.sp
-                          )
-                          Spacer(modifier = Modifier.height(4.dp))
-                          Text(
-                              text = scan.district,
-                              color = CharcoalBlack,
-                              fontSize = 16.sp,
-                              fontWeight = FontWeight.Bold
-                          )
-                          Spacer(modifier = Modifier.height(4.dp))
-                          Text(
-                              text = "Whitefly Count: ${scan.whiteflyCount}",
-                              color = CharcoalBlack.copy(alpha = 0.8f),
-                              fontSize = 14.sp
-                          )
-                      }
-                      
-                      val riskColor = when(scan.riskLevel) {
-                          "CRITICAL" -> WarningRed
-                          "MEDIUM" -> WheatGold
-                          else -> MintGreen
-                      }
-                      
+                  val riskColor = when(scan.riskLevel) {
+                      "CRITICAL" -> DangerRed
+                      "MEDIUM" -> WarningAmber
+                      else -> SuccessGreen
+                  }
+
+                  val badge = @Composable {
                       Surface(
                           color = riskColor.copy(alpha = 0.1f),
                           shape = RoundedCornerShape(8.dp),
@@ -1111,6 +1071,82 @@ fun HistoryScreen(navController: NavController) {
                               fontWeight = FontWeight.Bold,
                               modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                           )
+                      }
+                  }
+
+                  val topTextContent = @Composable {
+                      Column(
+                          modifier = Modifier.fillMaxWidth(),
+                          horizontalAlignment = if (currentLanguage == AppLanguage.ENGLISH) Alignment.Start else Alignment.End
+                      ) {
+                          val sdf = java.text.SimpleDateFormat("MMM dd, yyyy - hh:mm a", java.util.Locale.getDefault())
+                          Text(
+                              text = sdf.format(java.util.Date(scan.timestamp)),
+                              color = TextSecondary,
+                              fontSize = 12.sp
+                          )
+                          Spacer(modifier = Modifier.height(4.dp))
+                          val localizedDistrict = if (scan.district == "Multan Belt") {
+                              when (currentLanguage) {
+                                  AppLanguage.ENGLISH -> "Multan Belt"
+                                  AppLanguage.URDU, AppLanguage.PUNJABI, AppLanguage.SARAIKI -> "ملتان بیلٹ"
+                              }
+                          } else scan.district
+
+                          Text(
+                              text = localizedDistrict,
+                              color = TextPrimary,
+                              fontSize = 16.sp,
+                              fontWeight = FontWeight.Bold,
+                              textAlign = if (currentLanguage == AppLanguage.ENGLISH) TextAlign.Start else TextAlign.Right,
+                              modifier = Modifier.fillMaxWidth(),
+                              style = if (currentLanguage == AppLanguage.ENGLISH) androidx.compose.ui.text.TextStyle.Default else UrduTextStyle.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Rtl)
+                          )
+                      }
+                  }
+
+                  val whiteflyText = @Composable {
+                      val whiteflyLabel = when (currentLanguage) {
+                          AppLanguage.ENGLISH -> "Whitefly Count: "
+                          AppLanguage.URDU -> "چٹی مکھی کی تعداد: "
+                          AppLanguage.PUNJABI, AppLanguage.SARAIKI -> "چٹی مکھی دی تعداد: "
+                      }
+                      Text(
+                          text = "$whiteflyLabel${scan.whiteflyCount}",
+                          color = TextSecondary,
+                          fontSize = if (currentLanguage == AppLanguage.ENGLISH) 14.sp else 16.sp,
+                          textAlign = if (currentLanguage == AppLanguage.ENGLISH) TextAlign.Start else TextAlign.Right,
+                          modifier = Modifier.fillMaxWidth(),
+                          style = if (currentLanguage == AppLanguage.ENGLISH) androidx.compose.ui.text.TextStyle.Default else UrduTextStyle.copy(textDirection = androidx.compose.ui.text.style.TextDirection.Rtl)
+                      )
+                  }
+
+                  if (currentLanguage == AppLanguage.ENGLISH) {
+                      Row(
+                          modifier = Modifier.padding(16.dp),
+                          verticalAlignment = Alignment.CenterVertically
+                      ) {
+                          Column(modifier = Modifier.weight(1f)) {
+                              topTextContent()
+                              Spacer(modifier = Modifier.height(4.dp))
+                              whiteflyText()
+                          }
+                          badge()
+                      }
+                  } else {
+                      Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
+                          topTextContent()
+                          Spacer(modifier = Modifier.height(12.dp))
+                          Row(
+                              modifier = Modifier.fillMaxWidth(),
+                              horizontalArrangement = Arrangement.SpaceBetween,
+                              verticalAlignment = Alignment.CenterVertically
+                          ) {
+                              badge()
+                              Box(modifier = Modifier.weight(1f)) {
+                                  whiteflyText()
+                              }
+                          }
                       }
                   }
               }
@@ -1130,14 +1166,14 @@ fun BulletPoint(text: String) {
     Text(
       text = "•",
       style = MaterialTheme.typography.bodyLarge,
-      color = CharcoalBlack,
+      color = TextPrimary,
       fontWeight = FontWeight.Bold,
       modifier = Modifier.padding(end = 12.dp, top = 2.dp)
     )
     Text(
       text = text,
       style = MaterialTheme.typography.bodyLarge,
-      color = CharcoalBlack,
+      color = TextSecondary,
       lineHeight = 22.sp
     )
   }

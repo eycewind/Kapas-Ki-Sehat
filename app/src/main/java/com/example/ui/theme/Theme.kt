@@ -12,16 +12,16 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val ExecutiveDarkColorScheme = darkColorScheme(
-  primary = MintGreen,
-  onPrimary = CharcoalBlack,
-  secondary = WheatGold,
-  onSecondary = CharcoalBlack,
-  background = CharcoalBlack,
-  onBackground = PureWhite,
-  surface = DarkSurface,
-  onSurface = PureWhite,
-  error = WarningRed,
-  onError = PureWhite
+  primary = BrandGreenBright,
+  onPrimary = TextPrimary,
+  secondary = BrandGold,
+  onSecondary = TextPrimary,
+  background = BgMain,
+  onBackground = TextPrimary,
+  surface = Surface1,
+  onSurface = TextPrimary,
+  error = DangerRed,
+  onError = TextPrimary
 )
 
 @Composable
@@ -38,8 +38,8 @@ fun MyApplicationTheme(
   if (!view.isInEditMode) {
     SideEffect {
       val window = (view.context as Activity).window
-      window.statusBarColor = CharcoalBlack.toArgb()
-      window.navigationBarColor = CharcoalBlack.toArgb()
+      window.statusBarColor = BgMain.toArgb()
+      window.navigationBarColor = BgMain.toArgb()
       WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
       WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
     }
