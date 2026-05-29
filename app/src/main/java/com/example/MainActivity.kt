@@ -15,6 +15,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import com.example.localization.AppLanguage
 import com.example.localization.LocalizationData
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import com.example.database.ScanHistoryEntity
+import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -122,6 +128,10 @@ fun KapasApp(sharedViewModel: SharedViewModel = viewModel()) {
 
 @Composable
 fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLanguageChange: (AppLanguage) -> Unit) {
+  val context = androidx.compose.ui.platform.LocalContext.current
+  val appDatabase = (context.applicationContext as CottonAceApplication).database
+  val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+
   Column(
     modifier = Modifier
       .fillMaxSize()
@@ -360,7 +370,19 @@ fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLan
           contentAlignment = Alignment.Center
         ) {
           Surface(
-            onClick = { navController.navigate("scanner") },
+            onClick = { 
+                coroutineScope.launch(Dispatchers.IO) {
+                    val newScan = ScanHistoryEntity(
+                        timestamp = System.currentTimeMillis(),
+                        imagePath = "/storage/emulated/0/Android/data/com.example/files/mock_leaf.jpg",
+                        whiteflyCount = (5..45).random(),
+                        riskLevel = listOf("LOW", "MEDIUM", "CRITICAL").random(),
+                        district = "Multan Belt"
+                    )
+                    appDatabase.scanHistoryDao().insertScan(newScan)
+                }
+                navController.navigate("scanner") 
+            },
             color = MintGreen,
             shape = RoundedCornerShape(24.dp),
             border = BorderStroke(4.dp, CharcoalBlack.copy(alpha = 0.1f)),
@@ -1017,6 +1039,10 @@ fun ExpertScreen(navController: NavController) {
 
 @Composable
 fun HistoryScreen(navController: NavController) {
+  val context = androidx.compose.ui.platform.LocalContext.current
+  val appDatabase = (context.applicationContext as CottonAceApplication).database
+  val scanHistoryList by appDatabase.scanHistoryDao().getAllScans().collectAsState(initial = emptyList())
+
   Column(
     modifier = Modifier
       .fillMaxSize()
@@ -1031,30 +1057,64 @@ fun HistoryScreen(navController: NavController) {
         modifier = Modifier.padding(bottom = 24.dp)
       )
       
-      Surface(
-        color = PureWhite,
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.fillMaxWidth().weight(1f)
+      LazyColumn(
+          modifier = Modifier.fillMaxWidth().weight(1f),
+          verticalArrangement = Arrangement.spacedBy(16.dp)
       ) {
-        Column(
-          modifier = Modifier.padding(24.dp),
-          horizontalAlignment = Alignment.CenterHorizontally,
-          verticalArrangement = Arrangement.Center
-        ) {
-          Icon(
-            imageVector = Icons.Default.BarChart,
-            contentDescription = null,
-            tint = MintGreen,
-            modifier = Modifier.size(64.dp)
-          )
-          Spacer(modifier = Modifier.height(16.dp))
-          Text(
-            text = "Historical Scans Repository",
-            color = CharcoalBlack,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
-          )
-        }
+          items(scanHistoryList) { scan ->
+              Surface(
+                  color = PureWhite,
+                  shape = RoundedCornerShape(16.dp),
+                  modifier = Modifier.fillMaxWidth()
+              ) {
+                  Row(
+                      modifier = Modifier.padding(16.dp),
+                      verticalAlignment = Alignment.CenterVertically
+                  ) {
+                      Column(modifier = Modifier.weight(1f)) {
+                          val sdf = java.text.SimpleDateFormat("MMM dd, yyyy - hh:mm a", java.util.Locale.getDefault())
+                          Text(
+                              text = sdf.format(java.util.Date(scan.timestamp)),
+                              color = CharcoalBlack.copy(alpha = 0.6f),
+                              fontSize = 12.sp
+                          )
+                          Spacer(modifier = Modifier.height(4.dp))
+                          Text(
+                              text = scan.district,
+                              color = CharcoalBlack,
+                              fontSize = 16.sp,
+                              fontWeight = FontWeight.Bold
+                          )
+                          Spacer(modifier = Modifier.height(4.dp))
+                          Text(
+                              text = "Whitefly Count: ${scan.whiteflyCount}",
+                              color = CharcoalBlack.copy(alpha = 0.8f),
+                              fontSize = 14.sp
+                          )
+                      }
+                      
+                      val riskColor = when(scan.riskLevel) {
+                          "CRITICAL" -> WarningRed
+                          "MEDIUM" -> WheatGold
+                          else -> MintGreen
+                      }
+                      
+                      Surface(
+                          color = riskColor.copy(alpha = 0.1f),
+                          shape = RoundedCornerShape(8.dp),
+                          border = BorderStroke(1.dp, riskColor)
+                      ) {
+                          Text(
+                              text = scan.riskLevel,
+                              color = riskColor,
+                              fontSize = 12.sp,
+                              fontWeight = FontWeight.Bold,
+                              modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                          )
+                      }
+                  }
+              }
+          }
       }
     }
 }

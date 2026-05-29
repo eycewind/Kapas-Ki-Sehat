@@ -59,6 +59,10 @@ android {
   testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 
+ksp {
+  arg("room.generateKotlin", "true")
+}
+
 // Configure the Secrets Gradle Plugin to use .env and .env.example files
 // to match the convention used in Web projects.
 secrets {
@@ -89,8 +93,10 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   implementation(libs.androidx.navigation.compose)
-  implementation(libs.androidx.room.ktx)
-  implementation(libs.androidx.room.runtime)
+  // implementation(libs.androidx.room.ktx)
+  // implementation(libs.androidx.room.runtime)
+  implementation("androidx.room:room-runtime:2.6.1")
+  implementation("androidx.room:room-ktx:2.6.1")
   // implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
   // implementation(libs.firebase.ai)
@@ -123,6 +129,7 @@ dependencies {
   androidTestImplementation(libs.androidx.runner)
   debugImplementation(libs.androidx.compose.ui.test.manifest)
   debugImplementation(libs.androidx.compose.ui.tooling)
-  "ksp"(libs.androidx.room.compiler)
+  // "ksp"(libs.androidx.room.compiler)
+  ksp("androidx.room:room-compiler:2.6.1")
   "ksp"(libs.moshi.kotlin.codegen)
 }
