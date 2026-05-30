@@ -20,6 +20,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import com.example.database.ScanHistoryEntity
 import androidx.compose.runtime.collectAsState
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.ExistingWorkPolicy
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -382,6 +385,19 @@ fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLan
                         district = "Multan Belt"
                     )
                     appDatabase.scanHistoryDao().insertScan(newScan)
+
+                    // Trigger WorkManager Sync
+                    val workManager = androidx.work.WorkManager.getInstance(context.applicationContext)
+                    val constraints = androidx.work.Constraints.Builder()
+                        .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                        .build()
+                    val syncRequest = androidx.work.OneTimeWorkRequestBuilder<com.example.network.DataSyncWorker>()
+                        .build()
+                    workManager.enqueueUniqueWork(
+                        "CottonAceDataSync",
+                        androidx.work.ExistingWorkPolicy.KEEP,
+                        syncRequest
+                    )
                 }
                 navController.navigate("scanner") 
             },
@@ -797,6 +813,10 @@ fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewMod
   val confidence = scanResult?.confidence ?: 0f
   val recommendation = scanResult?.recommendation_ur ?: "No recommendation available."
 
+  val context = androidx.compose.ui.platform.LocalContext.current
+  val appDatabase = (context.applicationContext as CottonAceApplication).database
+  val coroutineScope = rememberCoroutineScope()
+
   Scaffold(
     modifier = Modifier.fillMaxSize(),
     containerColor = BgMain
@@ -928,9 +948,28 @@ fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewMod
       // Save Button
       Button(
         onClick = { 
-          navController.navigate("home") {
-            popUpTo(0) { inclusive = true }
-          }
+            coroutineScope.launch(Dispatchers.IO) {
+                val newScan = ScanHistoryEntity(
+                    timestamp = System.currentTimeMillis(),
+                    imagePath = "/storage/emulated/0/Android/data/com.example/files/mock_leaf.jpg",
+                    whiteflyCount = if (pestType.contains("Whitefly", ignoreCase = true)) 15 else (5..45).random(),
+                    riskLevel = if (confidence > 0.8f) "CRITICAL" else "MEDIUM",
+                    district = "Multan Belt"
+                )
+                appDatabase.scanHistoryDao().insertScan(newScan)
+
+                android.util.Log.d("CottonAceSync", "Save Clicked! Force-enqueuing WorkManager request manually right now...")
+                
+                val workManager = WorkManager.getInstance(context)
+                val syncRequest = OneTimeWorkRequestBuilder<com.example.network.DataSyncWorker>().build()
+                
+                workManager.enqueueUniqueWork(
+                    "CottonAceDataSync",
+                    ExistingWorkPolicy.REPLACE,
+                    syncRequest
+                )
+            }
+            navController.popBackStack()
         },
         modifier = Modifier
           .fillMaxWidth()

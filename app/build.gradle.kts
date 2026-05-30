@@ -113,6 +113,11 @@ dependencies {
   implementation("io.ktor:ktor-client-logging:2.3.7")
   implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
   implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
+  
+  // Supabase & WorkManager
+  implementation("io.github.jan-tennert.supabase:postgrest-kt:2.5.0")
+  implementation("io.github.jan-tennert.supabase:gotrue-kt:2.5.0")
+  implementation("androidx.work:work-runtime-ktx:2.9.0")
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
