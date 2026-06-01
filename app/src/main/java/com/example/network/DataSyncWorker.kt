@@ -64,8 +64,8 @@ class DataSyncWorker(
 
             val profilePayload = ProfilePayload(
                 device_id = deviceId,
-                app_version = "2.4",
-                preferred_language = "URDU"
+                app_version = com.example.BuildConfig.VERSION_NAME, // gradle versionName, per CONTRACTS.md §1
+                preferred_language = "ur" // canonical language code, not "URDU" (CONTRACTS.md §5)
             )
 
             val allPayloadsList = pendingScans.map { scan ->
@@ -87,7 +87,9 @@ class DataSyncWorker(
                 try {
                     supabase.from("farmers_profiles").upsert(profilePayload)
                 } catch (e: Exception) {
-                    Log.d("CottonAceSync", "Profile upsert note: ${e.message}")
+                    // Non-fatal: a failed profile upsert must not block diagnostic_logs sync,
+                    // but log at WARN so a persistent failure is visible (CONTRACTS.md §10 #15).
+                    Log.w("CottonAceSync", "farmers_profiles upsert failed (continuing): ${e.message}", e)
                 }
 
                 // Batch upload payloads to Supabase

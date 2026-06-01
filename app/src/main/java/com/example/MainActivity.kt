@@ -80,8 +80,17 @@ class SharedViewModel : ViewModel() {
     private val _scanResult = MutableStateFlow<ScanResponse?>(null)
     val scanResult: StateFlow<ScanResponse?> = _scanResult
 
+    // Path of the JPEG actually captured for this scan, carried Scanner -> Diagnosis
+    // so the saved log references the real file instead of a hardcoded mock path.
+    private val _imagePath = MutableStateFlow<String?>(null)
+    val imagePath: StateFlow<String?> = _imagePath
+
     fun setScanResult(result: ScanResponse) {
         _scanResult.value = result
+    }
+
+    fun setImagePath(path: String) {
+        _imagePath.value = path
     }
 }
 
@@ -782,18 +791,29 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
 
                                 val response = com.example.network.ApiClient.uploadScan(photoFile, lat, lon)
                                 sharedViewModel.setScanResult(response)
+                                sharedViewModel.setImagePath(photoFile.absolutePath)
                                 navController.navigate("diagnosis") {
                                     popUpTo("home") { inclusive = false }
                                 }
                             } catch (e: Exception) {
                                 e.printStackTrace()
                                 isScanning = false
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Scan failed — please try again.\nاسکین ناکام ہوگیا، دوبارہ کوشش کریں۔",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
                             }
                         }
                     }
                     override fun onError(exc: androidx.camera.core.ImageCaptureException) {
                         exc.printStackTrace()
                         isScanning = false
+                        android.widget.Toast.makeText(
+                            context,
+                            "Couldn't capture image — please try again.\nتصویر نہیں لی جا سکی، دوبارہ کوشش کریں۔",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
                     }
                 }
             )
@@ -819,6 +839,7 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
 @Composable
 fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewModel) {
   val scanResult by sharedViewModel.scanResult.collectAsState()
+  val capturedImagePath by sharedViewModel.imagePath.collectAsState()
   val pestType = scanResult?.pest_type ?: "Unknown Analysis"
   val confidence = scanResult?.confidence ?: 0f
   val recommendation = scanResult?.recommendation_ur ?: "No recommendation available."
@@ -965,7 +986,7 @@ fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewMod
                 try {
                     val newScan = ScanHistoryEntity(
                         timestamp = System.currentTimeMillis(),
-                        imagePath = "/storage/emulated/0/Android/data/com.example/files/mock_leaf.jpg",
+                        imagePath = capturedImagePath ?: "",
                         whiteflyCount = if (pestType.contains("Whitefly", ignoreCase = true)) 15 else (5..45).random(),
                         riskLevel = if (confidence > 0.8f) "CRITICAL" else "MEDIUM",
                         district = "Multan Belt"
@@ -1115,10 +1136,13 @@ fun HistoryScreen(navController: NavController, currentLanguage: AppLanguage) {
                   shape = RoundedCornerShape(16.dp),
                   modifier = Modifier.fillMaxWidth()
               ) {
+                  // Canonical risk enum (CONTRACTS.md §4): LOW / MEDIUM / HIGH / CRITICAL.
                   val riskColor = when(scan.riskLevel) {
                       "CRITICAL" -> DangerRed
+                      "HIGH" -> DangerRed
                       "MEDIUM" -> WarningAmber
-                      else -> SuccessGreen
+                      "LOW" -> SuccessGreen
+                      else -> TextSecondary // unknown value: neutral, never imply "healthy"
                   }
 
                   val badge = @Composable {
