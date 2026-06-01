@@ -47,10 +47,16 @@ class DataSyncWorker(
                 return Result.success()
             }
 
-            val deviceId = Settings.Secure.getString(
+            val rawDeviceId = Settings.Secure.getString(
                 applicationContext.contentResolver,
                 Settings.Secure.ANDROID_ID
             ) ?: "unknown_device"
+
+            val salt = "KapasKiSehat2026_SecureSalt"
+            val combinedId = rawDeviceId + salt
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+            val hashBytes = digest.digest(combinedId.toByteArray(Charsets.UTF_8))
+            val deviceId = hashBytes.joinToString("") { "%02x".format(it) }
 
             val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply {
                 timeZone = java.util.TimeZone.getTimeZone("UTC")

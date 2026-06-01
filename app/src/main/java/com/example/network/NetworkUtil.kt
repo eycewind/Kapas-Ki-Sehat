@@ -36,10 +36,12 @@ object ApiClient {
         }
     }
 
-    suspend fun uploadScan(imageFile: File): ScanResponse {
+    suspend fun uploadScan(imageFile: File, lat: Double, lon: Double): ScanResponse {
         val response = client.post("$BASE_URL/api/v1/scan") {
             setBody(MultiPartFormDataContent(
                 formData {
+                    append("latitude", lat.toString())
+                    append("longitude", lon.toString())
                     append("file", imageFile.readBytes(), Headers.build {
                         append(HttpHeaders.ContentType, "image/jpeg")
                         append(HttpHeaders.ContentDisposition, "filename=\"${imageFile.name}\"")

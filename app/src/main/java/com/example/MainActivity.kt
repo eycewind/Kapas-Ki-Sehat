@@ -23,6 +23,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.ExistingWorkPolicy
+import kotlinx.coroutines.tasks.await
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -65,7 +66,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.ui.theme.*
-import kotlinx.coroutines.delay
+
 import kotlinx.coroutines.launch
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -376,29 +377,6 @@ fun HomeScreen(navController: NavController, currentLanguage: AppLanguage, onLan
         ) {
           Surface(
             onClick = { 
-                coroutineScope.launch(Dispatchers.IO) {
-                    val newScan = ScanHistoryEntity(
-                        timestamp = System.currentTimeMillis(),
-                        imagePath = "/storage/emulated/0/Android/data/com.example/files/mock_leaf.jpg",
-                        whiteflyCount = (5..45).random(),
-                        riskLevel = listOf("LOW", "MEDIUM", "CRITICAL").random(),
-                        district = "Multan Belt"
-                    )
-                    appDatabase.scanHistoryDao().insertScan(newScan)
-
-                    // Trigger WorkManager Sync
-                    val workManager = androidx.work.WorkManager.getInstance(context.applicationContext)
-                    val constraints = androidx.work.Constraints.Builder()
-                        .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
-                        .build()
-                    val syncRequest = androidx.work.OneTimeWorkRequestBuilder<com.example.network.DataSyncWorker>()
-                        .build()
-                    workManager.enqueueUniqueWork(
-                        "CottonAceDataSync",
-                        androidx.work.ExistingWorkPolicy.KEEP,
-                        syncRequest
-                    )
-                }
                 navController.navigate("scanner") 
             },
             color = BrandGreen,
@@ -540,11 +518,23 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
     hasCameraPermission = isGranted
   }
 
+  val locationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+    androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+  ) {}
+
   LaunchedEffect(Unit) {
     if (!hasCameraPermission) {
       permissionLauncher.launch(android.Manifest.permission.CAMERA)
     }
+    locationPermissionLauncher.launch(
+        arrayOf(
+            android.Manifest.permission.ACCESS_FINE_LOCATION,
+            android.Manifest.permission.ACCESS_COARSE_LOCATION
+        )
+    )
   }
+
+  val fusedLocationClient = remember { com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(context) }
 
   var isScanning by remember { mutableStateOf(false) }
 
@@ -770,7 +760,27 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
                     override fun onImageSaved(output: androidx.camera.core.ImageCapture.OutputFileResults) {
                         coroutineScope.launch {
                             try {
-                                val response = com.example.network.ApiClient.uploadScan(photoFile)
+                                var lat = 0.0
+                                var lon = 0.0
+                                
+                                if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                    try {
+                                        @android.annotation.SuppressLint("MissingPermission")
+                                        val location = fusedLocationClient.getCurrentLocation(
+                                            com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
+                                            null
+                                        ).await()
+                                        
+                                        if (location != null) {
+                                            lat = location.latitude
+                                            lon = location.longitude
+                                        }
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    }
+                                }
+
+                                val response = com.example.network.ApiClient.uploadScan(photoFile, lat, lon)
                                 sharedViewModel.setScanResult(response)
                                 navController.navigate("diagnosis") {
                                     popUpTo("home") { inclusive = false }
@@ -816,6 +826,7 @@ fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewMod
   val context = androidx.compose.ui.platform.LocalContext.current
   val appDatabase = (context.applicationContext as CottonAceApplication).database
   val coroutineScope = rememberCoroutineScope()
+  var isSubmitting by remember { mutableStateOf(false) }
 
   Scaffold(
     modifier = Modifier.fillMaxSize(),
@@ -947,34 +958,47 @@ fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewMod
       
       // Save Button
       Button(
-        onClick = { 
+        onClick = {
+            if (isSubmitting) return@Button
+            isSubmitting = true
             coroutineScope.launch(Dispatchers.IO) {
-                val newScan = ScanHistoryEntity(
-                    timestamp = System.currentTimeMillis(),
-                    imagePath = "/storage/emulated/0/Android/data/com.example/files/mock_leaf.jpg",
-                    whiteflyCount = if (pestType.contains("Whitefly", ignoreCase = true)) 15 else (5..45).random(),
-                    riskLevel = if (confidence > 0.8f) "CRITICAL" else "MEDIUM",
-                    district = "Multan Belt"
-                )
-                appDatabase.scanHistoryDao().insertScan(newScan)
+                try {
+                    val newScan = ScanHistoryEntity(
+                        timestamp = System.currentTimeMillis(),
+                        imagePath = "/storage/emulated/0/Android/data/com.example/files/mock_leaf.jpg",
+                        whiteflyCount = if (pestType.contains("Whitefly", ignoreCase = true)) 15 else (5..45).random(),
+                        riskLevel = if (confidence > 0.8f) "CRITICAL" else "MEDIUM",
+                        district = "Multan Belt"
+                    )
+                    appDatabase.scanHistoryDao().insertScan(newScan)
 
-                android.util.Log.d("CottonAceSync", "Save Clicked! Force-enqueuing WorkManager request manually right now...")
-                
-                val workManager = WorkManager.getInstance(context)
-                val syncRequest = OneTimeWorkRequestBuilder<com.example.network.DataSyncWorker>().build()
-                
-                workManager.enqueueUniqueWork(
-                    "CottonAceDataSync",
-                    ExistingWorkPolicy.REPLACE,
-                    syncRequest
-                )
+                    android.util.Log.d("CottonAceSync", "Save Clicked! Force-enqueuing WorkManager request manually right now...")
+                    
+                    val workManager = WorkManager.getInstance(context)
+                    val syncRequest = OneTimeWorkRequestBuilder<com.example.network.DataSyncWorker>().build()
+                    
+                    workManager.enqueueUniqueWork(
+                        "CottonAceDataSync",
+                        ExistingWorkPolicy.REPLACE,
+                        syncRequest
+                    )
+                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                        navController.popBackStack()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                        isSubmitting = false
+                    }
+                }
             }
-            navController.popBackStack()
         },
+        enabled = !isSubmitting,
         modifier = Modifier
           .fillMaxWidth()
           .height(64.dp)
-          .testTag("save_log_button"),
+          .testTag("save_log_button")
+          .alpha(if (isSubmitting) 0.5f else 1f),
         shape = RoundedCornerShape(16.dp),
         colors = ButtonDefaults.buttonColors(
           containerColor = Surface2,
