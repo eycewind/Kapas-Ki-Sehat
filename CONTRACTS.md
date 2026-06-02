@@ -299,25 +299,28 @@ Code-vs-contract gaps, highest impact first.
 
 Status key: 🔴/🟠/🟡 = open · ✅ = fixed.
 
+Status key: 🔴/🟠/🟡 = open · ◑ = partially done · ✅ = fixed.
+
 | # | Sev | Issue |
 |---|---|---|
-| 1 | 🔴 | **No Supabase Storage upload.** Image never lands in `leaf-images`; `image_storage_path` always null → backend gatekeeper never runs. Install Storage module + upload after `/scan`. *(cross-repo — needs bucket)* |
-| 2 | 🔴 | `confidence_score` hardcoded `0.95f` in `DataSyncWorker` — use real `ScanResponse.confidence`. *(cross-repo — needs data plumbing)* |
-| 3 | 🔴 | `whitefly_count` fabricated `(5..45).random()` — extend `ScanResponse` to carry `whitefly_count` and use it. *(cross-repo)* |
-| 4 | 🔴 | `inference_time_ms` hardcoded `150` — measure actual round-trip / inference time. *(cross-repo)* |
-| 5 | 🔴 | `DiagnosticLogPayload` missing `image_storage_path`, `latitude`, `longitude`, `agricultural_belt`. *(cross-repo — needs columns)* |
-| 6 | ✅ | ~~`preferred_language` sends `"URDU"`~~ — now sends `"ur"` (DataSyncWorker.kt). Still hardcoded (reflecting the user's live selection needs persistence — follow-up). |
-| 7 | ✅ | ~~`app_version` sends `"2.4"`~~ — now `BuildConfig.VERSION_NAME` (`"1.0"`). |
-| 8 | 🟠 | GPS defaults to `0.0/0.0` when unavailable — send `null` (both to `/scan` and `diagnostic_logs`). *(touches request shape — deferred)* |
-| 9 | ◑ | History badge no longer mis-colors `HIGH` as healthy-green (now red); unknown values render neutral. **Still open:** the app only *emits* `CRITICAL`/`MEDIUM` (cross-repo, needs whitefly bands). |
-| 10 | ✅ | ~~`imagePath` mock path~~ — now the real captured file path, carried via `SharedViewModel`. |
-| 11 | ✅ | ~~`ScanResponse` non-nullable~~ — fields now have defaults; won't crash on a missing field. |
-| 12 | ✅ | ~~No HTTP status check / no timeout~~ — `uploadScan` now checks `status.isSuccess()`, rejects the `{status:"error"}` envelope, and the client has `HttpTimeout` (30s req / 15s connect). |
-| 13 | ✅ | ~~Silent upload failure~~ — both the upload `catch` and `imageCapture.onError` now show a bilingual Toast. |
-| 14 | 🟡 | `diagnostic_logs` insert response is not inspected; entities are marked `syncState=1` even if 0 rows landed (e.g. RLS rejection). |
-| 15 | ✅ | ~~`farmers_profiles` upsert swallows exceptions~~ — now logged at WARN with the throwable. |
-| 16 | 🟡 | Home weather + alert are hardcoded; should call `GET /api/v1/risk-metrics`. Expert screen is a static stub; `/api/v1/chat` unused. *(cross-repo)* |
-| 17 | 🟡 | Supabase URL/key committed to source — rotate and move to Secrets plugin. *(rotation is cross-repo)* |
+| 1 | 🔴 | **No Supabase Storage upload.** Image never lands in `leaf-images`; `image_storage_path` always null → backend gatekeeper never runs. *(Phase 3 — needs bucket setup first)* |
+| 2 | 🔴 | `confidence_score` hardcoded `0.95f` — use real `ScanResponse.confidence`. *(Phase 3)* |
+| 3 | 🔴 | `whitefly_count` fabricated — use real `ScanResponse.whitefly_count`. *(Phase 3)* |
+| 4 | 🔴 | `inference_time_ms` hardcoded `150` — measure actual round-trip. *(Phase 3)* |
+| 5 | ◑ | `DiagnosticLogPayload` — nullable columns (`image_storage_path`, `latitude`, `longitude`, `agricultural_belt`) **added to DTO** with `null` defaults. Populated with real values in Phase 3. |
+| 6 | ✅ | ~~`preferred_language` sends `"URDU"`~~ → sends `"ur"`. (Hardcoded for now; live-selection persistence is a local follow-up.) |
+| 7 | ✅ | ~~`app_version` sends `"2.4"`~~ → `BuildConfig.VERSION_NAME` (`"1.0"`). |
+| 8 | ✅ | ~~GPS defaults to `0.0/0.0`~~ → `lat`/`lon` are `Double?`, null when no fix. Omitted from the multipart form entirely (not sent as `0.0`). |
+| 9 | ◑ | History badge colors all 4 risk levels correctly. App still only *emits* `CRITICAL`/`MEDIUM` — deriving `LOW`/`HIGH` from real `whitefly_count` is Phase 3. |
+| 10 | ✅ | ~~`imagePath` mock path~~ → real captured file path via `SharedViewModel`. |
+| 11 | ✅ | ~~`ScanResponse` non-nullable crash~~ → all fields have safe defaults. DTO extended with `confidence_score`, `whitefly_count`, `recommendation_en`. |
+| 12 | ✅ | ~~No HTTP status check / no timeout~~ → `status.isSuccess()` check + `{status:"error"}` envelope rejection + `HttpTimeout` (30s/15s). |
+| 13 | ✅ | ~~Silent upload/capture failure~~ → bilingual Toast on both error paths. |
+| 14 | ✅ | ~~`syncState=1` marked without confirming insert~~ → ordering is now explicit with logging; `updateSyncStatus` is only reached if `insert` returned without throwing. |
+| 15 | ✅ | ~~`farmers_profiles` upsert swallows exceptions~~ → logged at WARN with throwable. |
+| 16 | ✅ | ~~`BASE_URL` hardcoded in Kotlin source~~ → `BuildConfig.BACKEND_BASE_URL` via Secrets plugin. Rotate ngrok by editing `.env` + Gradle sync only. |
+| 17 | 🟡 | Home weather + alert hardcoded; Expert chat is a stub. Wire to `/risk-metrics` + `/chat`. *(cross-repo — after Phase 3)* |
+| 18 | 🟡 | Supabase URL/key committed to source — rotate and move to Secrets plugin. *(rotation is cross-repo)* |
 
 ---
 

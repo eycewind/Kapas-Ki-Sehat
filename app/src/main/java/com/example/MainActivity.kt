@@ -769,9 +769,11 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
                     override fun onImageSaved(output: androidx.camera.core.ImageCapture.OutputFileResults) {
                         coroutineScope.launch {
                             try {
-                                var lat = 0.0
-                                var lon = 0.0
-                                
+                                // Null when GPS is unavailable — never default to 0.0
+                                // (0.0/0.0 is a real coordinate; CONTRACTS.md §3.1 / §10 #D).
+                                var lat: Double? = null
+                                var lon: Double? = null
+
                                 if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
                                     try {
                                         @android.annotation.SuppressLint("MissingPermission")
@@ -779,13 +781,14 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
                                             com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
                                             null
                                         ).await()
-                                        
+
                                         if (location != null) {
                                             lat = location.latitude
                                             lon = location.longitude
                                         }
                                     } catch (e: Exception) {
                                         e.printStackTrace()
+                                        // lat / lon remain null — handled gracefully downstream
                                     }
                                 }
 

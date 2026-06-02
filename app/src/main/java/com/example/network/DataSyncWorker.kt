@@ -10,6 +10,11 @@ import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 
+// Canonical shape per CONTRACTS.md §1.1.
+// Nullable fields (image_storage_path, lat, lon, agricultural_belt) are present
+// in the schema but populated with real values in Phase 3 (Storage upload chain).
+// Placeholder values for confidence_score / inference_time_ms are also replaced
+// in Phase 3 once real values are plumbed through ScanHistoryEntity.
 @Serializable
 data class DiagnosticLogPayload(
     val device_id: String,
@@ -18,7 +23,11 @@ data class DiagnosticLogPayload(
     val risk_level: String,
     val confidence_score: Float,
     val timestamp: String,
-    val inference_time_ms: Int
+    val inference_time_ms: Int,
+    val image_storage_path: String? = null,   // Phase 3: real Storage path
+    val latitude: Double? = null,             // Phase 3: real GPS (null = no fix)
+    val longitude: Double? = null,            // Phase 3: real GPS (null = no fix)
+    val agricultural_belt: String? = null     // Phase 3: derived from district
 )
 
 @Serializable
@@ -92,13 +101,17 @@ class DataSyncWorker(
                     Log.w("CottonAceSync", "farmers_profiles upsert failed (continuing): ${e.message}", e)
                 }
 
-                // Batch upload payloads to Supabase
+                // Insert throws on any failure (HTTP error, RLS rejection, network drop).
+                // If it throws, execution leaves this withContext block and is caught by
+                // the outer try/catch → Result.retry(). The updateSyncStatus calls below
+                // are therefore only reached on a confirmed successful insert. (CONTRACTS.md §10 #14)
                 supabase.from("diagnostic_logs").insert(allPayloadsList)
-                
-                // Mark entities as synced (syncState = 1) locally
+                Log.d("CottonAceSync", "INSERT confirmed for ${allPayloadsList.size} record(s). Marking local rows synced...")
+
                 pendingScans.forEach { scan ->
                     database.scanHistoryDao().updateSyncStatus(scan.id, 1)
                 }
+                Log.d("CottonAceSync", "Sync complete — ${pendingScans.size} row(s) marked syncState=1.")
             }
 
             Result.success()
