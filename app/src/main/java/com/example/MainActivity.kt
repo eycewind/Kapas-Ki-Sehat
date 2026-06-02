@@ -71,27 +71,38 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.network.ScanResponse
+import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.io.File
 import androidx.compose.ui.draw.clip
 
+// Holds everything produced by a single scan so Scanner → Diagnosis can access
+// real values without recomputing or re-fetching anything.
+data class ScanSession(
+    val response: ScanResponse,
+    val capturedFilePath: String,       // local JPEG path (real file, not mock)
+    val imageStoragePath: String?,      // bare object key in leaf-images; null if upload failed
+    val inferenceTimeMs: Long,          // measured round-trip around /api/v1/scan
+    val latitude: Double?,              // null when GPS unavailable
+    val longitude: Double?
+)
+
 class SharedViewModel : ViewModel() {
-    private val _scanResult = MutableStateFlow<ScanResponse?>(null)
-    val scanResult: StateFlow<ScanResponse?> = _scanResult
+    private val _session = MutableStateFlow<ScanSession?>(null)
+    val session: StateFlow<ScanSession?> = _session
 
-    // Path of the JPEG actually captured for this scan, carried Scanner -> Diagnosis
-    // so the saved log references the real file instead of a hardcoded mock path.
-    private val _imagePath = MutableStateFlow<String?>(null)
-    val imagePath: StateFlow<String?> = _imagePath
-
-    fun setScanResult(result: ScanResponse) {
-        _scanResult.value = result
+    fun setSession(s: ScanSession) {
+        _session.value = s
     }
+}
 
-    fun setImagePath(path: String) {
-        _imagePath.value = path
-    }
+// Canonical risk derivation from whitefly count bands (CONTRACTS.md §4).
+fun deriveRiskLevel(whiteflyCount: Int): String = when {
+    whiteflyCount >= 16 -> "CRITICAL"
+    whiteflyCount >= 9  -> "HIGH"
+    whiteflyCount >= 5  -> "MEDIUM"
+    else                -> "LOW"
 }
 
 class MainActivity : ComponentActivity() {
@@ -769,8 +780,8 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
                     override fun onImageSaved(output: androidx.camera.core.ImageCapture.OutputFileResults) {
                         coroutineScope.launch {
                             try {
-                                // Null when GPS is unavailable — never default to 0.0
-                                // (0.0/0.0 is a real coordinate; CONTRACTS.md §3.1 / §10 #D).
+                                // Null when GPS unavailable — never default to 0.0
+                                // (0.0/0.0 is a real coordinate; CONTRACTS.md §3.1).
                                 var lat: Double? = null
                                 var lon: Double? = null
 
@@ -781,20 +792,49 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
                                             com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
                                             null
                                         ).await()
-
                                         if (location != null) {
                                             lat = location.latitude
                                             lon = location.longitude
                                         }
                                     } catch (e: Exception) {
                                         e.printStackTrace()
-                                        // lat / lon remain null — handled gracefully downstream
+                                        // lat/lon remain null — handled gracefully downstream
                                     }
                                 }
 
+                                // Measure inference round-trip (includes network time;
+                                // acceptable per CONTRACTS.md §11 Step 3).
+                                val scanStartMs = System.currentTimeMillis()
                                 val response = com.example.network.ApiClient.uploadScan(photoFile, lat, lon)
-                                sharedViewModel.setScanResult(response)
-                                sharedViewModel.setImagePath(photoFile.absolutePath)
+                                val inferenceTimeMs = System.currentTimeMillis() - scanStartMs
+
+                                // Upload to Supabase Storage (non-fatal: gatekeeper skips
+                                // re-verification when image_storage_path is null).
+                                val deviceId = com.example.DeviceIdentity.computeId(context)
+                                val objectKey = "$deviceId/${photoFile.name}"
+                                var imageStoragePath: String? = null
+                                try {
+                                    val app = context.applicationContext as com.example.CottonAceApplication
+                                    // supabase-kt 2.5.0: upload(path, ByteArray, upsert).
+                                    // Content-type is not settable on this overload; bucket MIME
+                                    // restriction is cleared so any content-type is accepted.
+                                    // The bucket remains private — that's the security property.
+                                    app.supabaseClient.storage.from("leaf-images")
+                                        .upload(objectKey, photoFile.readBytes())
+                                    imageStoragePath = objectKey
+                                    android.util.Log.d("KapasStorage", "Uploaded: $objectKey")
+                                } catch (e: Exception) {
+                                    android.util.Log.w("KapasStorage", "Storage upload failed (non-fatal): ${e.message}")
+                                }
+
+                                sharedViewModel.setSession(ScanSession(
+                                    response = response,
+                                    capturedFilePath = photoFile.absolutePath,
+                                    imageStoragePath = imageStoragePath,
+                                    inferenceTimeMs = inferenceTimeMs,
+                                    latitude = lat,
+                                    longitude = lon
+                                ))
                                 navController.navigate("diagnosis") {
                                     popUpTo("home") { inclusive = false }
                                 }
@@ -841,11 +881,10 @@ fun ScannerScreen(navController: NavController, sharedViewModel: SharedViewModel
 
 @Composable
 fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewModel) {
-  val scanResult by sharedViewModel.scanResult.collectAsState()
-  val capturedImagePath by sharedViewModel.imagePath.collectAsState()
-  val pestType = scanResult?.pest_type ?: "Unknown Analysis"
-  val confidence = scanResult?.confidence ?: 0f
-  val recommendation = scanResult?.recommendation_ur ?: "No recommendation available."
+  val session by sharedViewModel.session.collectAsState()
+  val pestType    = session?.response?.pest_type        ?: "Unknown Analysis"
+  val confidence  = session?.response?.confidence       ?: 0f
+  val recommendation = session?.response?.recommendation_ur ?: "No recommendation available."
 
   val context = androidx.compose.ui.platform.LocalContext.current
   val appDatabase = (context.applicationContext as CottonAceApplication).database
@@ -987,12 +1026,18 @@ fun DiagnosisScreen(navController: NavController, sharedViewModel: SharedViewMod
             isSubmitting = true
             coroutineScope.launch(Dispatchers.IO) {
                 try {
+                    val whiteflyCount = session?.response?.whitefly_count ?: 0
                     val newScan = ScanHistoryEntity(
                         timestamp = System.currentTimeMillis(),
-                        imagePath = capturedImagePath ?: "",
-                        whiteflyCount = if (pestType.contains("Whitefly", ignoreCase = true)) 15 else (5..45).random(),
-                        riskLevel = if (confidence > 0.8f) "CRITICAL" else "MEDIUM",
-                        district = "Multan Belt"
+                        imagePath = session?.capturedFilePath ?: "",
+                        whiteflyCount = whiteflyCount,
+                        riskLevel = deriveRiskLevel(whiteflyCount), // canonical §4 bands
+                        district = "Multan Belt",
+                        confidenceScore = session?.response?.confidence ?: 0f,
+                        inferenceTimeMs = session?.inferenceTimeMs ?: 0L,
+                        imageStoragePath = session?.imageStoragePath,
+                        latitude = session?.latitude,
+                        longitude = session?.longitude
                     )
                     appDatabase.scanHistoryDao().insertScan(newScan)
 

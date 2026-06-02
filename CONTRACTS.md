@@ -303,11 +303,11 @@ Status key: 🔴/🟠/🟡 = open · ◑ = partially done · ✅ = fixed.
 
 | # | Sev | Issue |
 |---|---|---|
-| 1 | 🔴 | **No Supabase Storage upload.** Image never lands in `leaf-images`; `image_storage_path` always null → backend gatekeeper never runs. *(Phase 3 — needs bucket setup first)* |
-| 2 | 🔴 | `confidence_score` hardcoded `0.95f` — use real `ScanResponse.confidence`. *(Phase 3)* |
-| 3 | 🔴 | `whitefly_count` fabricated — use real `ScanResponse.whitefly_count`. *(Phase 3)* |
-| 4 | 🔴 | `inference_time_ms` hardcoded `150` — measure actual round-trip. *(Phase 3)* |
-| 5 | ◑ | `DiagnosticLogPayload` — nullable columns (`image_storage_path`, `latitude`, `longitude`, `agricultural_belt`) **added to DTO** with `null` defaults. Populated with real values in Phase 3. |
+| 1 | ✅ | ~~No Storage upload~~ — after `/scan`, JPEG is uploaded to `leaf-images/{device_id}/{epoch_ms}.jpg`. Path stored as `imageStoragePath` in `ScanHistoryEntity` → synced as `image_storage_path` in `diagnostic_logs`. Non-fatal: gatekeeper skips if null. |
+| 2 | ✅ | ~~`confidence_score` hardcoded~~ — real `ScanResponse.confidence` flows into `ScanHistoryEntity.confidenceScore` → `DiagnosticLogPayload.confidence_score`. |
+| 3 | ✅ | ~~`whitefly_count` fabricated~~ — real `ScanResponse.whitefly_count` stored and synced. |
+| 4 | ✅ | ~~`inference_time_ms` hardcoded~~ — measured round-trip around `/api/v1/scan` call (includes network; acceptable per MASTER §11). |
+| 5 | ✅ | ~~`DiagnosticLogPayload` missing columns~~ — `image_storage_path`, `latitude`, `longitude`, `agricultural_belt` all present. `agricultural_belt` still `null` (derive from district — future pass). |
 | 6 | ✅ | ~~`preferred_language` sends `"URDU"`~~ → sends `"ur"`. (Hardcoded for now; live-selection persistence is a local follow-up.) |
 | 7 | ✅ | ~~`app_version` sends `"2.4"`~~ → `BuildConfig.VERSION_NAME` (`"1.0"`). |
 | 8 | ✅ | ~~GPS defaults to `0.0/0.0`~~ → `lat`/`lon` are `Double?`, null when no fix. Omitted from the multipart form entirely (not sent as `0.0`). |
