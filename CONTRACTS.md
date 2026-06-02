@@ -16,7 +16,7 @@
 > app must conform to) and, where the current code differs, a **⚠️ Current code** note.
 > Open divergences are collected in §10.
 >
-> **Generated:** 2026-06-01 · last reconciled with MASTER-CONTRACTS.md: 2026-06-01
+> **Generated:** 2026-06-01 · last reconciled with MASTER-CONTRACTS.md: 2026-06-02
 > · gradle `versionName 1.0` · `applicationId` `com.aistudio.kapaskisehat.kzhfpx`
 > · `namespace` `com.example`
 
@@ -27,13 +27,13 @@
 ### Client configuration
 Defined in [CottonAceApplication.kt](app/src/main/java/com/example/CottonAceApplication.kt):
 
-| Setting | Value |
-|---|---|
-| `supabaseUrl` | `https://wmfqxrzoploggezfmnjn.supabase.co` |
-| `supabaseKey` | `sb_publishable_flQOih4VRvMCs67leUY3Zg_GFeGcNf-` (publishable/anon key) |
-| Installed modules | `Postgrest` only (no Auth/Storage/Realtime modules installed) |
+| Setting | Source | Notes |
+|---|---|---|
+| `supabaseUrl` | `BuildConfig.SUPABASE_URL` | from `.env` via Secrets plugin |
+| `supabaseKey` | `BuildConfig.SUPABASE_ANON_KEY` | JWT-format anon key; `sb_publishable_` rejected by Storage |
+| Installed modules | `Postgrest`, `Storage` | Auth/Realtime not installed |
 
-> ⚠️ Both URL and key are hardcoded in source (committed to git). See §6 and §10.
+> Keys must be the JWT (`eyJh…`) format — see `.env.example` for required key names.
 
 ### Tables the app writes (Postgrest)
 All Supabase writes happen in [DataSyncWorker.kt](app/src/main/java/com/example/network/DataSyncWorker.kt) (background `WorkManager` job). The app **only writes**; it does not read any Supabase table.
@@ -198,7 +198,7 @@ Android rule: derive from `ScanResponse.confidence` **and** `whitefly_count`.
 > ✅ Use the **codes** (`ur/pa/skr/en`) on the wire: `farmers_profiles.preferred_language`, `/chat` `language`.
 > ❌ Do not send full names (`"URDU"`).
 
-**⚠️ Current code** — `AppLanguage` enum uses full names internally (fine for UI state) but the sync sends the literal `"URDU"` to `preferred_language` (wrong) and hardcodes it regardless of the user's selection. → §10.
+The sync sends `"ur"` (fixed). Still hardcoded — does not yet reflect the user's live language selection (a local follow-up, §10 #6).
 
 ### String keys — `object LocalizationData` ([LocalizationData.kt](app/src/main/java/com/example/localization/LocalizationData.kt))
 Each key is `Map<AppLanguage, String>` (or `…List<String>>`). Language is in-memory UI state (not persisted, not Android resource locales). RTL via `UrduTextStyle` + bundled `noto_nastaliq_urdu.ttf`.
@@ -228,22 +228,19 @@ The Diagnosis screen renders `recommendation_ur` in the Action Protocol card.
 
 ## 7. Hardcoded values, secrets & env references
 
-| Value | Location | Notes |
+| Value | Location | Status |
 |---|---|---|
-| Backend base URL `http://192.168.18.11:8000` | NetworkUtil.kt:24 | LAN IP; `const val` → recompile to change. If reached via ngrok, this is stale every session. **Move to `BuildConfig`/`local.properties`** (`buildConfig=true` already on). |
-| Scan path `/api/v1/scan` | NetworkUtil.kt:40 | |
-| Supabase URL + publishable key | CottonAceApplication.kt:21-22 | committed to git; rotate + move to Secrets plugin |
-| Device-ID salt `KapasKiSehat2026_SecureSalt` | DataSyncWorker.kt:55 | SHA-256(ANDROID_ID + salt) |
-| `app_version = "2.4"` | DataSyncWorker.kt:67 | should be gradle `versionName` `"1.0"` |
-| `preferred_language = "URDU"` | DataSyncWorker.kt:69 | should be `"ur"`; also hardcoded |
-| `confidence_score = 0.95f` | DataSyncWorker.kt:78 | placeholder; use real value |
-| `inference_time_ms = 150` | DataSyncWorker.kt:80 | placeholder |
-| `imagePath = "/storage/.../mock_leaf.jpg"` | MainActivity.kt:968 | mock path |
-| `whiteflyCount` `15`/`(5..45).random()` | MainActivity.kt:969 | fabricated |
-| `district = "Multan Belt"` | MainActivity.kt:971 | hardcoded |
-| Room DB `cotton_ace.db` | CottonAceApplication.kt:16 | |
-| WorkManager unique name `CottonAceDataSync` | MainActivity.kt:980 | `ExistingWorkPolicy.REPLACE` |
-| `GEMINI_API_KEY` | .env.example | declared via Secrets plugin but **unused** by app code |
+| `BACKEND_BASE_URL` | `.env` → `BuildConfig.BACKEND_BASE_URL` | ✅ externalised; edit `.env` to rotate ngrok |
+| `SUPABASE_URL` | `.env` → `BuildConfig.SUPABASE_URL` | ✅ externalised |
+| `SUPABASE_ANON_KEY` | `.env` → `BuildConfig.SUPABASE_ANON_KEY` | ✅ externalised; JWT format required |
+| Scan path `/api/v1/scan` | NetworkUtil.kt | constant — only changes if backend renames it |
+| Device-ID salt `KapasKiSehat2026_SecureSalt` | DeviceIdentity.kt | hardcoded; changing it invalidates all stored device IDs |
+| `district = "Multan Belt"` | MainActivity.kt | 🟡 hardcoded; future: derive from GPS reverse-geocode |
+| `agricultural_belt = null` | DataSyncWorker.kt | 🟡 null placeholder; future: derive from district |
+| `preferred_language = "ur"` | DataSyncWorker.kt | 🟡 correct code but hardcoded; doesn't track user's live selection |
+| Room DB `cotton_ace.db` | CottonAceApplication.kt | constant |
+| WorkManager name `CottonAceDataSync` | MainActivity.kt | `ExistingWorkPolicy.REPLACE` |
+| `GEMINI_API_KEY` | .env.example | declared via Secrets plugin but unused by app code |
 
 ---
 
@@ -269,24 +266,34 @@ Yellowish_Leaf             → disease,  pest_type = "Whitefly"
 | `ScanResponse` | NetworkUtil.kt | `/api/v1/scan` response DTO (`@Serializable`) |
 | `DiagnosticLogPayload` | DataSyncWorker.kt | `diagnostic_logs` row DTO |
 | `ProfilePayload` | DataSyncWorker.kt | `farmers_profiles` row DTO |
-| `ScanHistoryEntity` | database/ScanHistoryEntity.kt | Room entity `scan_history` |
+| `ScanHistoryEntity` | database/ScanHistoryEntity.kt | Room entity `scan_history` (v2) |
 | `ScanHistoryDao` | database/ScanHistoryDao.kt | Room DAO |
-| `AppDatabase` | database/AppDatabase.kt | Room DB v1, `exportSchema=false` |
-| `SharedViewModel` | MainActivity.kt | `StateFlow<ScanResponse?>` across Scanner→Diagnosis |
-| `CottonAceApplication` | CottonAceApplication.kt | holds `database` + `supabaseClient` |
+| `AppDatabase` | database/AppDatabase.kt | Room DB v2, `exportSchema=false`, `fallbackToDestructiveMigration` |
+| `ScanSession` | MainActivity.kt | data carrier across Scanner→Diagnosis (replaces two loose ViewModel fields) |
+| `SharedViewModel` | MainActivity.kt | holds `StateFlow<ScanSession?>` |
+| `DeviceIdentity` (object) | DeviceIdentity.kt | SHA-256(ANDROID_ID + salt) — shared by Scanner + Worker |
+| `CottonAceApplication` | CottonAceApplication.kt | holds `database` + `supabaseClient` (Postgrest + Storage) |
 | `AppLanguage` (enum) | localization/LocalizationData.kt | UI language |
 | `LocalizationData` (object) | localization/LocalizationData.kt | static string maps |
 | `ApiClient` (object) | NetworkUtil.kt | Ktor backend client |
 | `DataSyncWorker` | network/DataSyncWorker.kt | `CoroutineWorker` Supabase sync |
 
-### `ScanHistoryEntity` (Room table `scan_history`, local-only)
+### `ScanHistoryEntity` (Room table `scan_history`, local-only, v2)
 ```kotlin
 @Entity(tableName = "scan_history")
 data class ScanHistoryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val timestamp: Long, val imagePath: String, val whiteflyCount: Int,
-    val riskLevel: String, val district: String,
-    val syncState: Int = 0   // 0 = pending sync, 1 = synced
+    val timestamp: Long,
+    val imagePath: String,          // local file path of captured JPEG
+    val whiteflyCount: Int,         // real value from ScanResponse
+    val riskLevel: String,          // derived via deriveRiskLevel(whiteflyCount)
+    val district: String,           // still hardcoded "Multan Belt"
+    val syncState: Int = 0,         // 0 = pending, 1 = synced
+    val confidenceScore: Float = 0f,
+    val inferenceTimeMs: Long = 0L,
+    val imageStoragePath: String? = null,  // bare object key in leaf-images
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )
 ```
 DAO: `insertScan` (REPLACE) · `getAllScans()` (`ORDER BY timestamp DESC`, Flow) · `getPendingSyncScans()` (`WHERE syncState = 0`, Flow) · `updateSyncStatus(id, status)`.
@@ -297,30 +304,28 @@ DAO: `insertScan` (REPLACE) · `getAllScans()` (`ORDER BY timestamp DESC`, Flow)
 
 Code-vs-contract gaps, highest impact first.
 
-Status key: 🔴/🟠/🟡 = open · ✅ = fixed.
-
-Status key: 🔴/🟠/🟡 = open · ◑ = partially done · ✅ = fixed.
+Status key: 🟠/🟡 = open · ✅ = fixed.
 
 | # | Sev | Issue |
 |---|---|---|
-| 1 | ✅ | ~~No Storage upload~~ — after `/scan`, JPEG is uploaded to `leaf-images/{device_id}/{epoch_ms}.jpg`. Path stored as `imageStoragePath` in `ScanHistoryEntity` → synced as `image_storage_path` in `diagnostic_logs`. Non-fatal: gatekeeper skips if null. |
-| 2 | ✅ | ~~`confidence_score` hardcoded~~ — real `ScanResponse.confidence` flows into `ScanHistoryEntity.confidenceScore` → `DiagnosticLogPayload.confidence_score`. |
-| 3 | ✅ | ~~`whitefly_count` fabricated~~ — real `ScanResponse.whitefly_count` stored and synced. |
-| 4 | ✅ | ~~`inference_time_ms` hardcoded~~ — measured round-trip around `/api/v1/scan` call (includes network; acceptable per MASTER §11). |
-| 5 | ✅ | ~~`DiagnosticLogPayload` missing columns~~ — `image_storage_path`, `latitude`, `longitude`, `agricultural_belt` all present. `agricultural_belt` still `null` (derive from district — future pass). |
-| 6 | ✅ | ~~`preferred_language` sends `"URDU"`~~ → sends `"ur"`. (Hardcoded for now; live-selection persistence is a local follow-up.) |
+| 1 | ✅ | ~~No Storage upload~~ → JPEG uploaded to `leaf-images/{device_id}/{epoch_ms}.jpg` after `/scan`. Path synced as `image_storage_path`. Non-fatal: gatekeeper skips if null. |
+| 2 | ✅ | ~~`confidence_score` hardcoded 0.95f~~ → real `ScanResponse.confidence` stored and synced. |
+| 3 | ✅ | ~~`whitefly_count` fabricated~~ → real `ScanResponse.whitefly_count` stored and synced. |
+| 4 | ✅ | ~~`inference_time_ms` hardcoded 150~~ → measured round-trip around `/scan` call. |
+| 5 | ✅ | ~~`DiagnosticLogPayload` missing columns~~ → `image_storage_path`, `latitude`, `longitude`, `agricultural_belt` present. `agricultural_belt` still `null` (🟡 future: derive from district). |
+| 6 | ✅ | ~~`preferred_language` sends `"URDU"`~~ → sends `"ur"`. 🟡 Still hardcoded; doesn't reflect user's live selection. |
 | 7 | ✅ | ~~`app_version` sends `"2.4"`~~ → `BuildConfig.VERSION_NAME` (`"1.0"`). |
-| 8 | ✅ | ~~GPS defaults to `0.0/0.0`~~ → `lat`/`lon` are `Double?`, null when no fix. Omitted from the multipart form entirely (not sent as `0.0`). |
-| 9 | ◑ | History badge colors all 4 risk levels correctly. App still only *emits* `CRITICAL`/`MEDIUM` — deriving `LOW`/`HIGH` from real `whitefly_count` is Phase 3. |
-| 10 | ✅ | ~~`imagePath` mock path~~ → real captured file path via `SharedViewModel`. |
-| 11 | ✅ | ~~`ScanResponse` non-nullable crash~~ → all fields have safe defaults. DTO extended with `confidence_score`, `whitefly_count`, `recommendation_en`. |
-| 12 | ✅ | ~~No HTTP status check / no timeout~~ → `status.isSuccess()` check + `{status:"error"}` envelope rejection + `HttpTimeout` (30s/15s). |
-| 13 | ✅ | ~~Silent upload/capture failure~~ → bilingual Toast on both error paths. |
-| 14 | ✅ | ~~`syncState=1` marked without confirming insert~~ → ordering is now explicit with logging; `updateSyncStatus` is only reached if `insert` returned without throwing. |
+| 8 | ✅ | ~~GPS defaults to `0.0/0.0`~~ → `Double?`, null when no fix; omitted from form entirely. |
+| 9 | ✅ | ~~History badge mis-colors HIGH~~ → all 4 levels render correctly. ~~App only emits CRITICAL/MEDIUM~~ → `deriveRiskLevel(whiteflyCount)` emits `LOW/MEDIUM/HIGH/CRITICAL` per §4 bands. |
+| 10 | ✅ | ~~`imagePath` mock path~~ → real captured file path via `ScanSession`. |
+| 11 | ✅ | ~~`ScanResponse` non-nullable crash~~ → all fields have safe defaults; extended with `confidence_score`, `whitefly_count`, `recommendation_en`. |
+| 12 | ✅ | ~~No HTTP status check / no timeout~~ → `status.isSuccess()` + `{status:"error"}` rejection + `HttpTimeout` 30s/15s. |
+| 13 | ✅ | ~~Silent scan/capture failure~~ → bilingual Toast on both error paths. |
+| 14 | ✅ | ~~`syncState=1` before confirming insert~~ → `updateSyncStatus` only reached after `insert` returns without throwing. |
 | 15 | ✅ | ~~`farmers_profiles` upsert swallows exceptions~~ → logged at WARN with throwable. |
-| 16 | ✅ | ~~`BASE_URL` hardcoded in Kotlin source~~ → `BuildConfig.BACKEND_BASE_URL` via Secrets plugin. Rotate ngrok by editing `.env` + Gradle sync only. |
-| 17 | 🟡 | Home weather + alert hardcoded; Expert chat is a stub. Wire to `/risk-metrics` + `/chat`. *(cross-repo — after Phase 3)* |
-| 18 | 🟡 | Supabase URL/key committed to source — rotate and move to Secrets plugin. *(rotation is cross-repo)* |
+| 16 | ✅ | ~~`BASE_URL` hardcoded~~ → `BuildConfig.BACKEND_BASE_URL` via Secrets plugin; rotate ngrok via `.env` only. |
+| 17 | ✅ | ~~Supabase URL/key hardcoded~~ → `BuildConfig.SUPABASE_URL` / `BuildConfig.SUPABASE_ANON_KEY` via `.env`. |
+| 18 | 🟡 | Home weather + alert hardcoded; Expert chat is a stub. Wire to `/risk-metrics` + `/chat`. *(after Phase 4 gatekeeper test)* |
 
 ---
 
@@ -333,8 +338,9 @@ Status key: 🔴/🟠/🟡 = open · ◑ = partially done · ✅ = fixed.
 │              └─► ScanResponse{status, pest_type, confidence,            │
 │                               whitefly_count, recommendation_ur/en, …}  │
 │                                                                          │
-│  [canonical] ─► upload JPEG to Supabase Storage "leaf-images"           │
-│                  └─► image_storage_path                                  │
+│  Upload JPEG to Supabase Storage "leaf-images"                           │
+│    → {device_id}/{epoch_ms}.jpg (bare object key, no bucket prefix)      │
+│    → image_storage_path stored in ScanHistoryEntity + diagnostic_logs    │
 │                                                                          │
 │  Save ─► Room "scan_history" ─► WorkManager "CottonAceDataSync"         │
 │                                    ├─► Supabase upsert farmers_profiles  │
