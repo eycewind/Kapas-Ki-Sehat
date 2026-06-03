@@ -16,7 +16,7 @@
 > current code behaviour. Where the two still differ a 🟡 note is inline. Resolved
 > divergences are tracked in §10.
 >
-> **Generated:** 2026-06-01 · last reconciled with MASTER-CONTRACTS.md: 2026-06-03
+> **Generated:** 2026-06-01 · last reconciled with MASTER-CONTRACTS.md: 2026-06-03 (v4)
 > · gradle `versionName 1.0` · `applicationId` `com.aistudio.kapaskisehat.kzhfpx`
 > · `namespace` `com.example`
 
@@ -51,12 +51,12 @@ Schema is managed manually in the Supabase SQL editor; no component owns migrati
 | `id` | `uuid` | NO | Supabase | PK, auto |
 | `device_id` | `varchar` | YES | App | FK → `farmers_profiles.device_id` |
 | `timestamp` | `timestamptz` | YES | App | Client event time, ISO-8601 UTC |
-| `district` | `varchar` | **NO** | App | Required |
-| `whitefly_count` | `integer` | **NO** | App | Required — from ML response |
+| `district` | `varchar` | **NO** | App | Required. Currently hardcoded `"Multan Belt"` (🟡 A2) |
+| `whitefly_count` | `integer` | **NO** | App | Required. Real value from ML — ⚠️ backend stubs `12` (§11) |
 | `risk_level` | `varchar` | **NO** | App | Required — enum §4 |
 | `confidence_score` | `numeric` | **NO** | App | Required — real `ScanResponse.confidence`, 0.0–1.0 |
-| `inference_time_ms` | `integer` | **NO** | App | Required — measure actual duration |
-| `image_storage_path` | `text` | YES | App | Path in `leaf-images` bucket (§2) |
+| `inference_time_ms` | `integer` | **NO** | App | Required — measured round-trip (includes network) |
+| `image_storage_path` | `text` | YES | App | Bare object key `{device_id}/{epoch_ms}.jpg` — no bucket prefix, no leading slash. Null if upload failed |
 | `latitude` | `double precision` | YES | App | GPS — `null` if unavailable, **not `0.0`** |
 | `longitude` | `double precision` | YES | App | GPS — `null` if unavailable, **not `0.0`** |
 | `agricultural_belt` | `varchar` | YES | App | e.g. `"Southern Punjab"` |
@@ -103,19 +103,20 @@ All values are real (Phase 3). `agricultural_belt` is intentionally null pending
 
 ## 2. Supabase Storage
 
-| Bucket | App role | Purpose |
-|---|---|---|
-| `leaf-images` | **writes** | Captured leaf JPEGs, downloaded by the backend gatekeeper for ML re-verification |
+| Bucket | App role | Visibility | Purpose |
+|---|---|---|---|
+| `leaf-images` | **writes** | **Private** | Captured leaf JPEGs, downloaded by the backend gatekeeper for ML re-verification |
+
+**Object path format (FROZEN):** `{device_id}/{epoch_ms}.jpg` — bare object key, no bucket prefix, no leading slash.
+
+**MIME restriction (FROZEN): `image/*`** — do NOT narrow to `image/jpeg`. The `supabase-kt` Storage client uploads `ByteArray` as `application/octet-stream`, which only the `image/*` wildcard accepts. Narrowing it silently breaks uploads with no error surfaced in logcat.
 
 **Canonical app flow:**
-1. After receiving `ScanResponse` from `/api/v1/scan`, upload the JPEG to
-   `leaf-images/{device_id}/{epoch_ms}.jpg`.
-2. Store the returned path in `diagnostic_logs.image_storage_path`.
-3. Backend skips re-verification when `image_storage_path` is null/empty.
+1. After receiving `ScanResponse` from `/api/v1/scan`, upload the JPEG to `leaf-images/{device_id}/{epoch_ms}.jpg`.
+2. Store the bare object key in `diagnostic_logs.image_storage_path`.
+3. Backend skips re-verification when `image_storage_path` is null/empty — do not overwrite edge values.
 
-**Current code** — upload is implemented and verified working in production. After receiving `ScanResponse`, the captured JPEG is uploaded to `leaf-images/{device_id}/{epoch_ms}.jpg` using the `storage-kt` module installed in `CottonAceApplication`. The bare object key is stored as `imageStoragePath` in `ScanHistoryEntity` and synced as `image_storage_path` in `diagnostic_logs`. Upload is non-fatal: failure is logged at WARN and `image_storage_path` is sent as `null`; the backend gatekeeper skips re-verification in that case.
-
-> Bucket MIME restriction: `image/*` (not `image/jpeg` — supabase-kt 2.5.0 sends `application/octet-stream` for `ByteArray` uploads, which `image/*` accepts).
+**Current code** — upload is implemented and verified working in production (2026-06-03). After receiving `ScanResponse`, the captured JPEG is uploaded using the `storage-kt` module installed in `CottonAceApplication`. The bare object key is stored as `imageStoragePath` in `ScanHistoryEntity` and synced as `image_storage_path` in `diagnostic_logs`. Upload is non-fatal: failure is logged at WARN and `image_storage_path` is sent as `null`; the backend gatekeeper skips re-verification in that case.
 
 ---
 
@@ -135,7 +136,7 @@ Called from `ScannerScreen` after capture ([MainActivity.kt:783](app/src/main/ja
 | Part | Type | Required | Canonical notes |
 |---|---|---|---|
 | `file` | binary `image/jpeg` | YES | `filename="scan_{epochMillis}.jpg"` |
-| `latitude` | float | NO | `null` if unavailable — **not `0.0`** |
+| `latitude` | float | NO | `null` if unavailable — **not `0.0`** (app omits field when null; `0.0` seen in backend logs is the backend's own default, not what the app sends) |
 | `longitude` | float | NO | `null` if unavailable — **not `0.0`** |
 
 **Success response (`200 OK`) — canonical shape:**
@@ -146,10 +147,10 @@ Called from `ScannerScreen` after capture ([MainActivity.kt:783](app/src/main/ja
   "confidence": 0.87,               // 0.0–1.0
   "confidence_score": 0.87,         // duplicate of confidence
   "pest_type": "Whitefly",          // "Whitefly" | "None"
-  "whitefly_count": 12,             // ⚠️ backend currently hardcodes 12
-  "action_protocol": "…",           // English guidance
-  "recommendation_en": "…",         // English (== action_protocol)
-  "recommendation_ur": "…",         // Urdu guidance
+  "whitefly_count": 12,             // ⚠️ HARDCODED STUB in backend — the §11 work item
+  "action_protocol": "…",           // English guidance (== recommendation_en)
+  "recommendation_en": "…",         // ⚠️ wording differs from §6 canonical (held; bundle with §11)
+  "recommendation_ur": "…",
   "latitude": 30.157,               // echoed
   "longitude": 71.524
 }
@@ -174,9 +175,15 @@ data class ScanResponse(
 All fields have defaults — a missing field never crashes deserialization. `ignoreUnknownKeys = true` tolerates additional backend fields (e.g. `prediction`, echoed lat/lon) without throwing.
 
 ### 3.2 Backend endpoints NOT yet called by the app (defined cross-repo)
-- `POST /api/v1/supabase-webhook` — Supabase→Backend only; app is not involved.
-- `GET /api/v1/risk-metrics` — returns `{ temperature, humidity, wind_speed, risk_level, alert_text_en, alert_text_ur }`. The Home screen currently shows **hardcoded** weather (37°C / 42% / 14 km/h) and a hardcoded alert; wiring it to this endpoint is a future task.
-- `POST /api/v1/chat` — `{ message, language }` → `{ reply }`. `language` uses §5 codes. The Expert screen is currently a static placeholder.
+- `POST /api/v1/supabase-webhook` — Supabase→Backend only; app is not involved. Gatekeeper verified firing live 2026-06-03.
+- `GET /api/v1/risk-metrics` — conforms. Returns:
+  ```jsonc
+  { "district": "MULTAN", "temperature": 37.0, "humidity": 42.0,
+    "wind_speed": 14.0, "risk_level": "CRITICAL",
+    "alert_text_en": "…", "alert_text_ur": "…" }
+  ```
+  Home screen still shows hardcoded values; wiring to this endpoint is 🟡 A4.
+- `POST /api/v1/chat` — conforms (JSON body). Request: `{ "message": "…", "language": "ur" }` → `{ "reply": "…" }`. Expert screen is a static stub; wiring is 🟡 A4.
 
 ---
 
@@ -200,7 +207,9 @@ fun deriveRiskLevel(whiteflyCount: Int): String = when {
     else                -> "LOW"
 }
 ```
-Called at save-time in `DiagnosisScreen` with `ScanResponse.whitefly_count`. All four values are emitted and verified in production (LOW, HIGH, CRITICAL observed in `diagnostic_logs`).
+Called at save-time in `DiagnosisScreen` with `ScanResponse.whitefly_count`. All four values are emitted and verified in production (LOW, HIGH observed in `diagnostic_logs`).
+
+> ⚠️ **Live consequence:** the backend currently hardcodes `whitefly_count = 12` in `/scan`. `deriveRiskLevel(12)` always returns `HIGH` for any pest and `LOW` for healthy. `MEDIUM` and `CRITICAL` cannot occur in practice until the backend ships real counting (§11 work item). The derivation logic is correct everywhere — it is starved of varied input.
 
 ### UI mapping — History badge ([MainActivity.kt](app/src/main/java/com/example/MainActivity.kt))
 | `riskLevel` | Color |
@@ -269,6 +278,8 @@ The Diagnosis screen renders `recommendation_ur` in the Action Protocol card.
 | WorkManager name `CottonAceDataSync` | MainActivity.kt | `ExistingWorkPolicy.REPLACE` |
 | `GEMINI_API_KEY` | .env.example | declared via Secrets plugin but unused by app code |
 
+> ⚠️ `.env` lines must be `KEY=value` with no duplicated key prefix. A doubled `BACKEND_BASE_URL=BACKEND_BASE_URL=https://…` entry makes `BuildConfig.BACKEND_BASE_URL` equal to the literal string `BACKEND_BASE_URL=https://…` — a URL-parse crash. Verified and resolved 2026-06-03. After any `.env` edit, Gradle sync is required — Secrets values bake into `BuildConfig` at compile time.
+
 ---
 
 ## 8. ML model constants (reference)
@@ -283,6 +294,7 @@ Yellowish_Leaf             → disease,  pest_type = "Whitefly"
 - **Model version:** `Flee-v1.0.4-stb`
 - **Confidence threshold:** `0.75` (backend gatekeeper re-verifies below this)
 - **Confidence scale:** always `0.0–1.0`, never `0–100`
+- **The model is a classifier** — it does NOT count whiteflies. `whitefly_count` in the `/scan` response is currently hardcoded to `12` by the backend (§11 work item). See §4 live consequence note.
 
 ---
 
@@ -352,7 +364,11 @@ Status key: 🟠/🟡 = open · ✅ = fixed.
 | 15 | ✅ | ~~`farmers_profiles` upsert swallows exceptions~~ → logged at WARN with throwable. |
 | 16 | ✅ | ~~`BASE_URL` hardcoded~~ → `BuildConfig.BACKEND_BASE_URL` via Secrets plugin; rotate ngrok via `.env` only. |
 | 17 | ✅ | ~~Supabase URL/key hardcoded~~ → `BuildConfig.SUPABASE_URL` / `BuildConfig.SUPABASE_ANON_KEY` via `.env`. |
-| 18 | 🟡 | Home weather + alert hardcoded; Expert chat is a stub. Wire to `/risk-metrics` + `/chat`. *(after Phase 4 gatekeeper test)* |
+| 18 | 🟡 | Home weather + alert hardcoded; Expert chat is a stub. Wire to `/risk-metrics` + `/chat`. Both endpoints conform. *(A4 — next local work item after §11 lands)* |
+
+**Next cross-repo work item (MASTER v4 §11): real `whitefly_count`**
+The backend hardcodes `12` in `/scan`. The app faithfully syncs whatever value it receives, so no Android code changes are needed for Options A or B. Android guardrail: do not re-introduce any hardcoded count. If Option C is chosen (decouple risk from count), `deriveRiskLevel` must not be changed until §4 is rewritten in MASTER first.
+MASTER v4 issue refs: W1 🔴 (backend primary), A1/A2/A3 🟡 (Android local follow-ups).
 
 ---
 
