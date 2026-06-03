@@ -12,11 +12,11 @@
 > changed), reconcile the relevant updates *into* this file — don't defer to MASTER
 > directly.
 >
-> **Reading convention:** Each shared surface lists the **Canonical contract** (what the
-> app must conform to) and, where the current code differs, a **⚠️ Current code** note.
-> Open divergences are collected in §10.
+> **Reading convention:** Each shared surface describes the canonical contract and the
+> current code behaviour. Where the two still differ a 🟡 note is inline. Resolved
+> divergences are tracked in §10.
 >
-> **Generated:** 2026-06-01 · last reconciled with MASTER-CONTRACTS.md: 2026-06-02
+> **Generated:** 2026-06-01 · last reconciled with MASTER-CONTRACTS.md: 2026-06-03
 > · gradle `versionName 1.0` · `applicationId` `com.aistudio.kapaskisehat.kzhfpx`
 > · `namespace` `com.example`
 
@@ -64,16 +64,24 @@ Schema is managed manually in the Supabase SQL editor; no component owns migrati
 
 > ❌ There is **no `status`** column and **no `image_url`** column. Use `image_storage_path`.
 
-**⚠️ Current code** — `DiagnosticLogPayload` ([DataSyncWorker.kt](app/src/main/java/com/example/network/DataSyncWorker.kt)) sends only:
+**Current code** — `DiagnosticLogPayload` ([DataSyncWorker.kt](app/src/main/java/com/example/network/DataSyncWorker.kt)) conforms to the canonical schema:
 ```kotlin
 @Serializable
 data class DiagnosticLogPayload(
-    val device_id: String, val district: String, val whitefly_count: Int,
-    val risk_level: String, val confidence_score: Float,   // hardcoded 0.95f
-    val timestamp: String, val inference_time_ms: Int       // hardcoded 150
+    val device_id: String,
+    val district: String,
+    val whitefly_count: Int,              // real value from ScanResponse
+    val risk_level: String,
+    val confidence_score: Float,          // real ScanResponse.confidence, 0.0–1.0
+    val timestamp: String,                // ISO-8601 UTC
+    val inference_time_ms: Int,           // measured round-trip (includes network)
+    val image_storage_path: String? = null, // bare object key; null if upload failed
+    val latitude: Double? = null,         // null when GPS unavailable — never 0.0
+    val longitude: Double? = null,
+    val agricultural_belt: String? = null // 🟡 null placeholder; future: derive from district
 )
 ```
-Missing vs canonical: `image_storage_path`, `latitude`, `longitude`, `agricultural_belt`. And `confidence_score`/`inference_time_ms`/`whitefly_count` are fabricated, not real. → §10.
+All values are real (Phase 3). `agricultural_belt` is intentionally null pending derivation logic.
 
 #### `farmers_profiles` — canonical schema
 
@@ -86,7 +94,7 @@ Missing vs canonical: `image_storage_path`, `latitude`, `longitude`, `agricultur
 | `app_version` | `varchar` | **NO** | gradle `versionName`, currently `"1.0"` |
 | `preferred_language` | `varchar` | **NO** | language **code** §5 (`"ur"`, not `"URDU"`) |
 
-**⚠️ Current code** — `ProfilePayload` sends `device_id`, `app_version = "2.4"` (wrong), `preferred_language = "URDU"` (wrong, should be `"ur"`); omits `registered_at`/`last_active_at` (nullable, acceptable). → §10.
+**Current code** — `ProfilePayload` sends `device_id`, `app_version = BuildConfig.VERSION_NAME` (`"1.0"`), `preferred_language = "ur"`. Omits `registered_at`/`last_active_at` (nullable — acceptable). The `"ur"` code is currently hardcoded and does not yet reflect the user's live language selection (🟡 §10 #6 follow-up).
 
 #### Tables the app does NOT touch (owned elsewhere; listed for cross-repo awareness)
 `model_deployments`, `harvested_images_pool`, `system_health_telemetry` — read/written by backend & dashboard. The Android app has no contract with these today. (`system_health_telemetry.log_level` ∈ `INFO|WARN|ERROR` if the app ever reports telemetry.)
@@ -105,7 +113,9 @@ Missing vs canonical: `image_storage_path`, `latitude`, `longitude`, `agricultur
 2. Store the returned path in `diagnostic_logs.image_storage_path`.
 3. Backend skips re-verification when `image_storage_path` is null/empty.
 
-**⚠️ Current code** — the app **never uploads to Storage** (no Storage module installed). `image_storage_path` is always absent, so the backend gatekeeper never runs. → §10 (#1, highest priority).
+**Current code** — upload is implemented and verified working in production. After receiving `ScanResponse`, the captured JPEG is uploaded to `leaf-images/{device_id}/{epoch_ms}.jpg` using the `storage-kt` module installed in `CottonAceApplication`. The bare object key is stored as `imageStoragePath` in `ScanHistoryEntity` and synced as `image_storage_path` in `diagnostic_logs`. Upload is non-fatal: failure is logged at WARN and `image_storage_path` is sent as `null`; the backend gatekeeper skips re-verification in that case.
+
+> Bucket MIME restriction: `image/*` (not `image/jpeg` — supabase-kt 2.5.0 sends `application/octet-stream` for `ByteArray` uploads, which `image/*` accepts).
 
 ---
 
@@ -115,7 +125,7 @@ Client: `ApiClient` ([NetworkUtil.kt](app/src/main/java/com/example/network/Netw
 
 | Field | Value |
 |---|---|
-| **Base URL** | `http://192.168.18.11:8000` ⚠️ hardcoded LAN IP — see §7 |
+| **Base URL** | `BuildConfig.BACKEND_BASE_URL` (from `.env` via Secrets plugin — see §7) |
 
 ### 3.1 `POST /api/v1/scan` — used by the app
 Called from `ScannerScreen` after capture ([MainActivity.kt:783](app/src/main/java/com/example/MainActivity.kt:783)).
@@ -148,12 +158,20 @@ Called from `ScannerScreen` after capture ([MainActivity.kt:783](app/src/main/ja
 
 > `/api/v1/scan` does **not** write `diagnostic_logs`. The app performs the INSERT after receiving this response.
 
-**⚠️ Current code** — `ScanResponse` deserializes only 3 fields:
+**Current code** — `ScanResponse` ([NetworkUtil.kt](app/src/main/java/com/example/network/NetworkUtil.kt)) deserializes all relevant fields with safe defaults:
 ```kotlin
 @Serializable
-data class ScanResponse(val pest_type: String, val confidence: Float, val recommendation_ur: String)
+data class ScanResponse(
+    val status: String? = null,          // "success" | "error"
+    val pest_type: String = "Unknown",
+    val confidence: Float = 0f,          // 0.0–1.0
+    val confidence_score: Float = 0f,    // duplicate of confidence (backend sends both)
+    val whitefly_count: Int = 0,
+    val recommendation_ur: String = "",
+    val recommendation_en: String = ""
+)
 ```
-It drops `whitefly_count`, `confidence_score`, `prediction`, `recommendation_en`, `status`, echoed lat/lon — so the real `whitefly_count`/`confidence` can't flow into the DB insert. `ignoreUnknownKeys=true` tolerates the extra fields, but **missing required fields still throw** (§10). → should be extended to carry at least `whitefly_count` and `status`.
+All fields have defaults — a missing field never crashes deserialization. `ignoreUnknownKeys = true` tolerates additional backend fields (e.g. `prediction`, echoed lat/lon) without throwing.
 
 ### 3.2 Backend endpoints NOT yet called by the app (defined cross-repo)
 - `POST /api/v1/supabase-webhook` — Supabase→Backend only; app is not involved.
@@ -173,16 +191,25 @@ It drops `whitefly_count`, `confidence_score`, `prediction`, `recommendation_en`
 | `HIGH` | Action recommended | 9–15 |
 | `CRITICAL` | Outbreak; immediate mitigation | 16+ |
 
-Android rule: derive from `ScanResponse.confidence` **and** `whitefly_count`.
+Android rule: derive from `whitefly_count` using the bands above via `deriveRiskLevel()`:
+```kotlin
+fun deriveRiskLevel(whiteflyCount: Int): String = when {
+    whiteflyCount >= 16 -> "CRITICAL"
+    whiteflyCount >= 9  -> "HIGH"
+    whiteflyCount >= 5  -> "MEDIUM"
+    else                -> "LOW"
+}
+```
+Called at save-time in `DiagnosisScreen` with `ScanResponse.whitefly_count`. All four values are emitted and verified in production (LOW, HIGH, CRITICAL observed in `diagnostic_logs`).
 
-### UI mapping — History badge ([MainActivity.kt:1118](app/src/main/java/com/example/MainActivity.kt:1118))
+### UI mapping — History badge ([MainActivity.kt](app/src/main/java/com/example/MainActivity.kt))
 | `riskLevel` | Color |
 |---|---|
 | `CRITICAL` | `DangerRed` |
+| `HIGH` | `DangerRed` |
 | `MEDIUM` | `WarningAmber` |
-| anything else (incl. `LOW`, `HIGH`) | `SuccessGreen` |
-
-**⚠️ Current code** — only ever produces two values: `confidence > 0.8f ? "CRITICAL" : "MEDIUM"` ([MainActivity.kt:970](app/src/main/java/com/example/MainActivity.kt:970)). `LOW`/`HIGH` are never emitted, and `HIGH` would mis-render green in the badge. → §10.
+| `LOW` | `SuccessGreen` |
+| unknown | `TextSecondary` (neutral — never implies healthy) |
 
 ---
 
